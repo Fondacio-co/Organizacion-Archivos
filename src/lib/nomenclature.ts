@@ -1,38 +1,52 @@
 /*
  * Nomenclatura del cliente:  BLOQUE_TIPO_FECHA_Descripcion_Version
  * Ejemplo:                   CAM_IAC_2026-05-30_JornadaSiembra_v01
- * Para cambiar o agregar códigos, edita las listas de abajo.
+ * Los códigos de bloque y tipo vienen del catálogo (catalog.ts), que los
+ * administradores editan desde la pestaña Configuración.
  */
 
-export const BLOQUES = {
-  FOR: { label: "Formación", color: "#EA5A0C" },
-  CAM: { label: "Campus Ambiental", color: "#00A3B4" },
-  SOS: { label: "Sede Sostenible", color: "#B08800" },
-  BYC: { label: "Bienestar y Cuidado", color: "#D81159" },
-  GEN: { label: "General", color: "#3B3183" },
-} as const
+import { DEFAULT_CATALOG, type Catalog, type CatalogEntry } from "./catalog"
 
-export const TIPOS = {
-  ACT: "Actas de reunión",
-  ADM: "Documentos administrativos",
-  BDD: "Bases de datos, listas y seguimientos",
-  COM: "Comunicaciones internas y externas",
-  FIC: "Fichas de programa",
-  FMT: "Plantillas y formatos en blanco",
-  IAC: "Informes de actividades",
-  IDO: "Informes para donantes",
-  INC: "Informes colaborativos",
-  IRE: "Informes de resultados",
-  MAN: "Manuales y protocolos",
-  MAT: "Material pedagógico",
-  PRY: "Proyectos, convocatorias, cronogramas y presupuestos",
-} as const
+/** Código de bloque (FOR, CAM…) */
+export type Bloque = string
+/** Código de tipo (ACT, IAC…) */
+export type Tipo = string
 
-export type Bloque = keyof typeof BLOQUES
-export type Tipo = keyof typeof TIPOS
+let catalog: Catalog = DEFAULT_CATALOG
+let CODE_RE: RegExp
+let VALID_RE: RegExp
 
-/** Tipos que normalmente van sin fecha */
-export const SIN_FECHA: Tipo[] = ["MAN", "FMT", "FIC"]
+/** Rehace las expresiones que dependen de los códigos */
+function rebuild() {
+  const bloques = catalog.bloques.map((b) => b.code).join("|")
+  const tipos = catalog.tipos.map((t) => t.code).join("|")
+  CODE_RE = new RegExp(`^(?:ADC_)?(?:(${bloques})_)?(?:(${tipos})_)?`, "i")
+  VALID_RE = new RegExp(
+    `^(${bloques})_(${tipos})_` +
+      `(?<date>\\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\\d|3[01]))?|-S[12]|-\\d{4})?_)?` +
+      `[A-Z0-9][A-Za-z0-9]*_(v\\d{2}|FINAL)$`
+  )
+}
+rebuild()
+
+/** Cambia el catálogo vigente (al cargarlo del Drive o al editarlo) */
+export function setCatalog(next: Catalog) {
+  catalog = next
+  rebuild()
+}
+
+export function getCatalog(): Catalog {
+  return catalog
+}
+
+export const bloqueInfo = (code: string): CatalogEntry | undefined =>
+  catalog.bloques.find((b) => b.code === code)
+export const tipoInfo = (code: string): CatalogEntry | undefined =>
+  catalog.tipos.find((t) => t.code === code)
+export const isBloque = (code: string) => !!bloqueInfo(code)
+export const isTipo = (code: string) => !!tipoInfo(code)
+/** Tipos que normalmente van sin fecha (manuales, fichas, formatos…) */
+export const isSinFecha = (code: string) => !!tipoInfo(code)?.sinFecha
 
 /** "auto" = respeta la fecha que ya trae el nombre (con su precisión) */
 export type DatePrecision = "auto" | "day" | "month" | "year" | "none"
@@ -91,10 +105,6 @@ export function toDescription(text: string): string {
     .join("")
 }
 
-const CODE_RE = new RegExp(
-  `^(?:ADC_)?(?:(${Object.keys(BLOQUES).join("|")})_)?(?:(${Object.keys(TIPOS).join("|")})_)?`,
-  "i"
-)
 /** Fecha o periodo dentro de un nombre: 2026, 2026-05, 2026-05-30, 2026-S1 (semestre), 2024-2026 (rango) */
 const DATE_RE = /(?:^|[_\s])(\d{4}(?:-(?:\d{4}|S[12]|\d{2}(?:-\d{2})?))?)(?=[_\s]|$)/i
 /** Fotos de celular/cámara: IMG_20250312_101522, PXL_20250312… */
@@ -172,8 +182,9 @@ export function complianceIssue(base: string): string | null {
   if (isCompliant(base)) return null
   const p = base.split("_")
   if (p[0] === "ADC") return "Empieza con ADC, que ya no se usa"
-  if (!(p[0] in BLOQUES)) return `Falta el bloque al inicio (${Object.keys(BLOQUES).join(", ")})`
-  if (!p[1] || !(p[1] in TIPOS)) return "Falta el tipo después del bloque (ACT, IAC, MAN…)"
+  if (!isBloque(p[0]))
+    return `Falta el bloque al inicio (${catalog.bloques.map((b) => b.code).join(", ")})`
+  if (!p[1] || !isTipo(p[1])) return "Falta el tipo después del bloque (ACT, IAC, MAN…)"
   const last = p[p.length - 1]
   if (!/^(v\d{2}|FINAL)$/.test(last)) return "Falta la versión al final (v01, v02… o FINAL)"
   const middle = p.slice(2, -1)
@@ -184,12 +195,6 @@ export function complianceIssue(base: string): string | null {
     return `La fecha debe ir como ${DATE_FORMATS_HELP}`
   return "La descripción va sin espacios ni tildes, con mayúscula en cada palabra"
 }
-
-const VALID_RE = new RegExp(
-  `^(${Object.keys(BLOQUES).join("|")})_(${Object.keys(TIPOS).join("|")})_` +
-    `(?<date>\\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\\d|3[01]))?|-S[12]|-\\d{4})?_)?` +
-    `[A-Z0-9][A-Za-z0-9]*_(v\\d{2}|FINAL)$`
-)
 
 /** ¿El nombre (sin extensión) sigue la nomenclatura? */
 export function isCompliant(base: string): boolean {
@@ -253,7 +258,7 @@ export function nomenParts(
     if (override.date && isValidDate(override.date)) [date, dateSource] = [override.date, "manual"]
     else if (rule.date) [date, dateSource] = [rule.date, "global"]
     else if (parsed.date) [date, dateSource] = [parsed.date, "name"]
-    else if (!(tipo && SIN_FECHA.includes(tipo))) [date, dateSource] = [localDate(modifiedTime), "file"]
+    else if (!(tipo && isSinFecha(tipo))) [date, dateSource] = [localDate(modifiedTime), "file"]
   } else {
     const len = DATE_LEN[rule.precision]
     if (len) {

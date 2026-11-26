@@ -2,11 +2,12 @@ import type { ReactNode } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PlusIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { Catalog, CatalogKind } from "@/lib/catalog"
 import {
-  BLOQUES,
-  SIN_FECHA,
-  TIPOS,
+  bloqueInfo,
+  isSinFecha,
   toDescription,
   type Bloque,
   type DatePrecision,
@@ -36,13 +37,26 @@ const VERSION_LABELS: Record<VersionChoice, string> = {
 
 /** "keep" = mantener el bloque/tipo que ya trae cada archivo */
 const KEEP = "keep"
-const bloqueItems = {
-  [KEEP]: "Actual",
-  ...Object.fromEntries(Object.entries(BLOQUES).map(([k, v]) => [k, `${k} · ${v.label}`])),
+/** Opción "+ Crear nuevo…" (no es un código: abre el formulario) */
+const NEW = "__nuevo__"
+
+function itemsFor(catalog: Catalog, kind: CatalogKind) {
+  return {
+    [KEEP]: "Actual",
+    [NEW]: kind === "bloques" ? "Crear nuevo bloque" : "Crear nuevo tipo",
+    ...Object.fromEntries(catalog[kind].map((e) => [e.code, `${e.code} · ${e.label}`])),
+  }
 }
-const tipoItems = {
-  [KEEP]: "Actual",
-  ...Object.fromEntries(Object.entries(TIPOS).map(([k, v]) => [k, `${k} · ${v}`])),
+
+/** Primera opción de los menús: crear una categoría (solo administradores) */
+function CreateItem({ kind, canEdit }: { kind: CatalogKind; canEdit: boolean }) {
+  return (
+    <SelectItem value={NEW} disabled={!canEdit} className="font-medium text-primary">
+      <PlusIcon className="size-4" />
+      {kind === "bloques" ? "Crear nuevo bloque" : "Crear nuevo tipo"}
+      {!canEdit && <span className="text-[11px] font-normal text-muted-foreground">(solo administradores)</span>}
+    </SelectItem>
+  )
 }
 
 function Step({ n, label, hint, children }: { n: number; label: string; hint?: ReactNode; children: ReactNode }) {
@@ -77,7 +91,7 @@ function NamePreview({ example, count }: { example?: PreviewItem; count: number 
   }
   const { base, ext } = splitName({ name: example.newName, native: example.file.native })
   const parts = base.split("_")
-  const color = BLOQUES[parts[0] as Bloque]?.color ?? "#3B3183"
+  const color = bloqueInfo(parts[0])?.color ?? "#3B3183"
   const same = example.status === "same"
   return (
     <div className="rounded-lg bg-primary px-3 py-3 text-white">
@@ -107,11 +121,19 @@ export function NomenTab({
   onChange,
   example,
   count,
+  catalog,
+  canEdit,
+  onCreate,
 }: {
   nomen: NomenRule
   onChange: (n: NomenRule) => void
   example?: PreviewItem
   count: number
+  catalog: Catalog
+  /** true = la cuenta es administradora y puede crear categorías */
+  canEdit: boolean
+  /** Abre el formulario para crear un bloque o tipo nuevo */
+  onCreate: (kind: CatalogKind) => void
 }) {
   const set = (patch: Partial<NomenRule>) => onChange({ ...nomen, ...patch })
   const typed = toDescription(nomen.description)
@@ -126,21 +148,25 @@ export function NomenTab({
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
         <Step n={1} label="Bloque">
           <Select
-            items={bloqueItems}
+            items={itemsFor(catalog, "bloques")}
             value={nomen.bloque || KEEP}
-            onValueChange={(v) => set({ bloque: (!v || v === KEEP ? "" : v) as Bloque | "" })}
+            onValueChange={(v) => {
+              if (v === NEW) return onCreate("bloques")
+              set({ bloque: (!v || v === KEEP ? "" : v) as Bloque | "" })
+            }}
           >
             <SelectTrigger className="w-full min-w-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="min-w-60">
+              <CreateItem kind="bloques" canEdit={canEdit} />
               <SelectItem value={KEEP}>
                 <span className="text-muted-foreground">Actual</span>
               </SelectItem>
-              {Object.entries(BLOQUES).map(([code, b]) => (
-                <SelectItem key={code} value={code}>
+              {catalog.bloques.map((b) => (
+                <SelectItem key={b.code} value={b.code}>
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: b.color }} />
-                  <b className="w-9">{code}</b>
+                  <b className="w-9">{b.code}</b>
                   <span className="text-muted-foreground">{b.label}</span>
                 </SelectItem>
               ))}
@@ -149,11 +175,12 @@ export function NomenTab({
         </Step>
         <Step n={2} label="Tipo">
           <Select
-            items={tipoItems}
+            items={itemsFor(catalog, "tipos")}
             value={nomen.tipo || KEEP}
             onValueChange={(v) => {
+              if (v === NEW) return onCreate("tipos")
               const tipo = (!v || v === KEEP ? "" : v) as Tipo | ""
-              const sinFecha = !!tipo && SIN_FECHA.includes(tipo)
+              const sinFecha = !!tipo && isSinFecha(tipo)
               set({
                 tipo,
                 // manuales, fichas y formatos van sin fecha (salvo que ya traigan una y se respete)
@@ -172,13 +199,15 @@ export function NomenTab({
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-80 min-w-80">
+              <CreateItem kind="tipos" canEdit={canEdit} />
               <SelectItem value={KEEP}>
                 <span className="text-muted-foreground">Actual</span>
               </SelectItem>
-              {Object.entries(TIPOS).map(([code, label]) => (
-                <SelectItem key={code} value={code}>
-                  <b className="w-9">{code}</b>
-                  <span className="text-muted-foreground">{label}</span>
+              {catalog.tipos.map((t) => (
+                <SelectItem key={t.code} value={t.code}>
+                  <span className="size-2.5 rounded-full" style={{ backgroundColor: t.color }} />
+                  <b className="w-9">{t.code}</b>
+                  <span className="text-muted-foreground">{t.label}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -193,7 +222,7 @@ export function NomenTab({
           nomen.precision === "auto"
             ? "Se respeta la fecha que ya trae el nombre. Si no tiene, se usa la del archivo: revísala abajo."
             : nomen.precision === "none"
-            ? nomen.tipo && SIN_FECHA.includes(nomen.tipo as Tipo)
+            ? nomen.tipo && isSinFecha(nomen.tipo)
               ? "Los manuales, fichas y formatos van sin fecha."
               : undefined
             : nomen.date

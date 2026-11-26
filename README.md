@@ -17,6 +17,7 @@ Está hecha con React, Vite y shadcn/ui. Funciona solo en el navegador: no hay s
 - **Revisión:** cada archivo aparece con ✅ si cumple la regla o ⚠️ con el motivo si no. El botón **«N sin nomenclatura»** muestra solo los que faltan.
 - **Nomenclatura (pestaña principal):** sugiere el nombre corregido reutilizando el bloque, el tipo, la fecha y la versión que ya trae el archivo. Si falta algo (por ejemplo el bloque o la descripción) lo pide. La descripción y la fecha se pueden corregir archivo por archivo en la vista previa.
 - **Más opciones:** Nombre nuevo (con numeración automática), Reemplazar texto, Agregar prefijo o sufijo, Formato y Manual.
+- **Configuración:** los administradores crean, editan y eliminan bloques y tipos (con su color). También se puede crear uno desde la primera opción de los menús Bloque y Tipo («+ Crear nuevo…»).
 - **Seguridad:** vista previa, confirmación que explica qué archivos no se tocarán y por qué, bloqueo de nombres repetidos y de archivos sin permiso, **Historial** con **Deshacer** por lote y registro CSV.
 
 ### Regla de nombres
@@ -29,7 +30,16 @@ Está hecha con React, Vite y shadcn/ui. Funciona solo en el navegador: no hay s
 | Descripción | Junta, sin tildes, mayúscula en cada palabra: `JornadaSiembra` |
 | Versión | `v01`, `v02`… o `FINAL` |
 
-Los códigos están en `src/lib/nomenclature.ts`: para agregar o cambiar un bloque o tipo se edita esa lista.
+### Códigos de bloque y tipo (pestaña Configuración)
+
+Los bloques y tipos se administran desde la pestaña **Configuración** de la página, no desde el código:
+
+- Se guardan en un archivo **`Organizacion de Archivos - codigos.json`** en el Drive de la Fundación, que hace de base de datos: todos los computadores leen el mismo archivo al iniciar sesión.
+- **Administradores** = quienes tienen permiso de **edición** sobre ese archivo. Pueden crear, editar (nombre, color y "va sin fecha") y eliminar códigos. Para nombrar a otro administrador, se le comparte el archivo como *Editor* en Drive. Los demás lo ven en solo lectura.
+- **Primera vez:** si el archivo no existe, en Configuración aparece **Crear base de códigos**. Lo crea en el Drive de quien pulsa el botón, con los códigos de fábrica, y lo comparte en solo lectura con todo el dominio `@fondacio-co.org`. Se puede mover luego a una unidad compartida sin que se pierda (la página lo encuentra por una marca interna, no por su ubicación).
+- El **código** (3 letras) no se puede cambiar después de creado, porque los archivos que lo usan quedarían sin nomenclatura. Al **eliminar** uno, los archivos que lo usan no se tocan en Drive, pero pasan a ⚠️.
+- Si dos administradores guardan a la vez, la página lo detecta y pide recargar en vez de pisar el cambio del otro.
+- **No se debe editar el .json a mano.** Si se daña, la página sigue funcionando con los códigos de fábrica (`DEFAULT_CATALOG` en `src/lib/catalog.ts`) y lo avisa en Configuración.
 
 ## Trabajar en el código
 
@@ -66,7 +76,8 @@ Cada cambio que se sube a la rama `main` de este repositorio se publica solo en 
 
 | Archivo | Qué hace |
 |---|---|
-| `src/lib/nomenclature.ts` | Códigos, reglas de la nomenclatura, sugerencias y motivos de error |
+| `src/lib/catalog.ts` | Catálogo de bloques y tipos: códigos de fábrica, validaciones, crear/editar/eliminar |
+| `src/lib/nomenclature.ts` | Reglas de la nomenclatura (usan el catálogo vigente), sugerencias y motivos de error |
 | `src/lib/rename.ts` | Vista previa de los nombres nuevos y detección de problemas |
 | `src/lib/google-drive.ts` | Inicio de sesión con Google y llamadas a la API de Drive |
 | `src/lib/demo-drive.ts` | Datos de ejemplo del modo demostración |

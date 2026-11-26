@@ -7,10 +7,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { BLOQUES, SIN_FECHA, TIPOS } from "@/lib/nomenclature"
+import type { Catalog } from "@/lib/catalog"
 
 /** Botón "¿Qué significa cada código?" con la guía completa de la nomenclatura */
-export function CodesLegend() {
+export function CodesLegend({ catalog }: { catalog: Catalog }) {
   return (
     <Dialog>
       <DialogTrigger className="flex items-center gap-1 rounded-md text-xs font-medium text-primary hover:underline">
@@ -33,7 +33,7 @@ export function CodesLegend() {
               Bloque · quién lo produce
             </h3>
             <ul className="grid gap-1">
-              {Object.entries(BLOQUES).map(([code, b]) => (
+              {catalog.bloques.map(({ code, ...b }) => (
                 <li key={code} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 odd:bg-muted/60">
                   <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: b.color }} />
                   <b className="w-10 font-mono text-sm" style={{ color: b.color }}>
@@ -49,12 +49,15 @@ export function CodesLegend() {
               Tipo · qué clase de documento es
             </h3>
             <ul className="grid gap-1">
-              {Object.entries(TIPOS).map(([code, label]) => (
+              {catalog.tipos.map(({ code, label, color, sinFecha }) => (
                 <li key={code} className="flex items-start gap-2.5 rounded-md px-2 py-1.5 odd:bg-muted/60">
-                  <b className="w-10 shrink-0 font-mono text-sm">{code}</b>
+                  <span className="mt-1.5 size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+                  <b className="w-10 shrink-0 font-mono text-sm" style={{ color }}>
+                    {code}
+                  </b>
                   <span className="text-sm">
                     {label}
-                    {SIN_FECHA.includes(code as keyof typeof TIPOS) && (
+                    {sinFecha && (
                       <span className="ml-1.5 text-xs text-muted-foreground">(sin fecha)</span>
                     )}
                   </span>

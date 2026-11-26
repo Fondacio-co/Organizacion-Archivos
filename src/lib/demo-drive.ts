@@ -1,4 +1,5 @@
-import { kindFromMime, type DriveBackend, type DriveFile, type FolderEntry } from "./types"
+import { DEFAULT_CATALOG } from "./catalog"
+import { CatalogConflictError, kindFromMime, type CatalogFile, type DriveBackend, type DriveFile, type FolderEntry } from "./types"
 
 /* Datos de ejemplo para ver y probar la página sin conectar una cuenta real. */
 
@@ -92,6 +93,12 @@ export function createDemoBackend(): DriveBackend {
   const files = buildFiles()
   /** La demostración simula dos cuentas para probar "Cambiar de cuenta" */
   let account = 0
+  let catalogFile: CatalogFile | null = {
+    id: "demo-catalogo",
+    catalog: DEFAULT_CATALOG,
+    canEdit: true,
+    version: "1",
+  }
   const ACCOUNTS = [
     { email: "demo@ejemplo.com", name: "Cuenta de demostración" },
     { email: "otra.cuenta@ejemplo.com", name: "Otra cuenta" },
@@ -164,6 +171,26 @@ export function createDemoBackend(): DriveBackend {
       if (!f.canRename)
         throw new Error("Esta cuenta no tiene permiso para hacer eso (se necesita permiso de edición).")
       f.name = newName
+    },
+
+    // Catálogo en memoria: la primera cuenta es administradora y la segunda no,
+    // para poder probar los dos casos con "Cambiar de cuenta"
+    async loadCatalog() {
+      await wait(200)
+      if (!catalogFile) return null
+      return { ...catalogFile, canEdit: account === 0 }
+    },
+    async createCatalog(catalog) {
+      await wait(400)
+      catalogFile = { id: "demo-catalogo", catalog, canEdit: true, version: "1" }
+      return catalogFile
+    },
+    async saveCatalog(file, catalog) {
+      await wait(300)
+      if (!catalogFile || file.version !== catalogFile.version) throw new CatalogConflictError()
+      if (account !== 0) throw new Error("Tu cuenta no puede editar los códigos.")
+      catalogFile = { ...catalogFile, catalog, version: String(Number(catalogFile.version) + 1) }
+      return { ...catalogFile, canEdit: true }
     },
   }
 }

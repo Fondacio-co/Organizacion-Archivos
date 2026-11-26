@@ -1,11 +1,29 @@
+import { parseCatalog, type Catalog } from "./catalog"
 import {
+  CatalogConflictError,
   kindFromMime,
+  type CatalogFile,
   type DriveBackend,
   type DriveFile,
   type FolderEntry,
   type ScanResult,
   type UserInfo,
 } from "./types"
+
+const UPLOAD = "https://www.googleapis.com/upload/drive/v3"
+/** Marca invisible que identifica el .json del catálogo, aunque lo muevan o renombren */
+const CATALOG_PROP = "organizacionArchivosCatalogo"
+const CATALOG_NAME = "Organizacion de Archivos - codigos.json"
+const CATALOG_FIELDS = "id,version,webViewLink,capabilities/canEdit"
+/** Dominios públicos con los que no tiene sentido compartir "con toda la organización" */
+const PUBLIC_DOMAINS = new Set(["gmail.com", "googlemail.com", "hotmail.com", "outlook.com", "yahoo.com"])
+
+interface RawCatalogFile {
+  id: string
+  version: string
+  webViewLink?: string
+  capabilities?: { canEdit?: boolean }
+}
 
 /*
  * Conexión real con Google: inicio de sesión con Google Identity Services
@@ -177,7 +195,8 @@ export function createGoogleBackend(clientId: string): DriveBackend {
 
   async function api<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
     const t = await getToken()
-    const res = await fetch(`${API}${path}`, {
+    // las rutas que empiezan por http son de subida de contenido (upload/drive/v3)
+    const res = await fetch(path.startsWith("http") ? path : `${API}${path}`, {
       ...init,
       headers: {
         Authorization: `Bearer ${t}`,
@@ -349,6 +368,96 @@ export function createGoogleBackend(clientId: string): DriveBackend {
         body: JSON.stringify({ name: newName }),
       })
     },
+
+    async loadCatalog() {
+      const raw = await findCatalogFile()
+      if (!raw) return null
+      const content = await api<unknown>(
+        `/files/${encodeURIComponent(raw.id)}?alt=media&supportsAllDrives=true`
+      ).catch(() => null)
+      return toCatalogFile(raw, parseCatalog(content))
+    },
+
+    async createCatalog(catalog, domain) {
+      const boundary = `orgarch${Math.random().toString(36).slice(2)}`
+      const meta = {
+        name: CATALOG_NAME,
+        mimeType: "application/json",
+        appProperties: { [CATALOG_PROP]: "1" },
+        description:
+          "Códigos de bloque y tipo de la herramienta Organización de Archivos. Edítalos desde la pestaña Configuración de la herramienta, no a mano. Quien puede editar este archivo es administrador.",
+      }
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(catalog, null, 2)}\r\n` +
+        `--${boundary}--`
+      const raw = await api<RawCatalogFile>(
+        `${UPLOAD}/files?uploadType=multipart&supportsAllDrives=true&fields=${CATALOG_FIELDS}`,
+        { method: "POST", body, headers: { "Content-Type": `multipart/related; boundary=${boundary}` } }
+      )
+      // Todos los de la organización lo pueden leer (y encontrar); solo los editores lo cambian
+      if (domain && !PUBLIC_DOMAINS.has(domain)) {
+        await api(
+          `/files/${encodeURIComponent(raw.id)}/permissions?supportsAllDrives=true&sendNotificationEmail=false`,
+          {
+            method: "POST",
+            body: JSON.stringify({ type: "domain", role: "reader", domain, allowFileDiscovery: true }),
+          }
+        ).catch(() => {
+          /* si el dominio no permite compartir así, el administrador lo comparte a mano */
+        })
+      }
+      const fresh = await api<RawCatalogFile>(
+        `/files/${encodeURIComponent(raw.id)}?supportsAllDrives=true&fields=${CATALOG_FIELDS}`
+      )
+      return toCatalogFile(fresh, catalog)
+    },
+
+    async saveCatalog(file, catalog) {
+      // Antes de guardar se revisa que nadie lo haya cambiado desde que se leyó
+      const current = await api<RawCatalogFile>(
+        `/files/${encodeURIComponent(file.id)}?supportsAllDrives=true&fields=${CATALOG_FIELDS}`
+      )
+      if (current.version !== file.version) throw new CatalogConflictError()
+      if (!current.capabilities?.canEdit)
+        throw new Error("Tu cuenta no puede editar los códigos. Pide a un administrador que te comparta el archivo como Editor.")
+      const raw = await api<RawCatalogFile>(
+        `${UPLOAD}/files/${encodeURIComponent(file.id)}?uploadType=media&supportsAllDrives=true&fields=${CATALOG_FIELDS}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(catalog, null, 2),
+          headers: { "Content-Type": "application/json; charset=UTF-8" },
+        }
+      )
+      return toCatalogFile(raw, catalog)
+    },
+  }
+
+  /**
+   * Busca el .json por su marca: primero en lo que la cuenta ve (Mi unidad, compartido
+   * y unidades compartidas) y luego en lo compartido con toda la organización.
+   * Si hubiera varios, usa el más antiguo (el original).
+   */
+  async function findCatalogFile(): Promise<RawCatalogFile | null> {
+    for (const corpora of ["allDrives", "domain"]) {
+      const params = new URLSearchParams({
+        q: `appProperties has { key='${CATALOG_PROP}' and value='1' } and trashed = false`,
+        corpora,
+        supportsAllDrives: "true",
+        includeItemsFromAllDrives: "true",
+        orderBy: "createdTime",
+        pageSize: "10",
+        fields: `files(${CATALOG_FIELDS})`,
+      })
+      try {
+        const res = await api<{ files: RawCatalogFile[] }>(`/files?${params}`)
+        if (res.files?.length) return res.files[0]
+      } catch (e) {
+        if (corpora === "allDrives") throw e
+        // "domain" no existe para cuentas personales: se ignora
+      }
+    }
+    return null
   }
 }
 
@@ -364,4 +473,14 @@ function friendlyError(status: number, reason: string, message: string): string 
   if (status === 401) return SESSION_EXPIRED
   if (status >= 500) return "Google Drive no respondió. Inténtalo de nuevo en un momento."
   return message || `Error de Google Drive (${status}).`
+}
+
+function toCatalogFile(raw: RawCatalogFile, catalog: Catalog | null): CatalogFile {
+  return {
+    id: raw.id,
+    catalog,
+    canEdit: !!raw.capabilities?.canEdit,
+    version: String(raw.version),
+    webViewLink: raw.webViewLink,
+  }
 }

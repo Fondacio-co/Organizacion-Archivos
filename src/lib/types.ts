@@ -1,3 +1,5 @@
+import type { Catalog } from "./catalog"
+
 export type FileKind =
   | "folder"
   | "doc"
@@ -74,6 +76,25 @@ export interface RenameResult extends RenameRequest {
   error?: string
 }
 
+/** El archivo .json del catálogo de códigos en Drive */
+export interface CatalogFile {
+  id: string
+  /** null si el archivo existe pero está dañado */
+  catalog: Catalog | null
+  /** true = esta cuenta puede editarlo (es administradora) */
+  canEdit: boolean
+  /** Versión de Drive: sirve para detectar si otra persona lo cambió */
+  version: string
+  webViewLink?: string
+}
+
+/** Otra persona guardó el catálogo mientras tú lo editabas */
+export class CatalogConflictError extends Error {
+  constructor() {
+    super("Otro administrador cambió los códigos mientras editabas. Recarga para ver la versión más reciente.")
+  }
+}
+
 /** Lo que la interfaz necesita de Drive; hay una versión real y una de demostración. */
 export interface DriveBackend {
   demo: boolean
@@ -91,6 +112,12 @@ export interface DriveBackend {
     onProgress?: (p: ScanProgress) => void
   ): Promise<ScanResult>
   rename(id: string, newName: string): Promise<void>
+  /** Busca el .json del catálogo (null si todavía no existe) */
+  loadCatalog(): Promise<CatalogFile | null>
+  /** Crea el .json y lo comparte en solo lectura con el dominio de la cuenta */
+  createCatalog(catalog: Catalog, domain: string | null): Promise<CatalogFile>
+  /** Guarda cambios; falla con CatalogConflictError si otra persona lo cambió antes */
+  saveCatalog(file: CatalogFile, catalog: Catalog): Promise<CatalogFile>
 }
 
 export function kindFromMime(mime: string): FileKind {

@@ -1,6 +1,6 @@
 import type { DriveFile } from "./types"
 
-import { buildNomenName, defaultNomen, isCompliant, localDate, nomenParts, TIPOS, type NomenRule } from "./nomenclature"
+import { buildNomenName, defaultNomen, isCompliant, isTipo, localDate, nomenParts, type NomenRule } from "./nomenclature"
 
 export type RenameMode = "nomen" | "rename" | "replace" | "affix" | "number" | "format" | "manual"
 
@@ -213,7 +213,7 @@ export function buildPreview(
         const parts = base.split("_")
         const desc = parts[parts.length - 2]
         // sin descripción (solo fecha o códigos) no se numera: falta ese dato
-        if (parts.length < 4 || /^\d{4}(-\d{2}){0,2}$/.test(desc) || desc in TIPOS) return
+        if (parts.length < 4 || /^\d{4}(-\d{2}){0,2}$/.test(desc) || isTipo(desc)) return
         parts[parts.length - 2] = desc + String(i + 1).padStart(digits, "0")
         it.newName = parts.join("_") + ext
       })

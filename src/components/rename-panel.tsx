@@ -19,6 +19,7 @@ import {
 } from "@/lib/rename"
 import { FileKindIcon } from "./file-kind-icon"
 import { NomenTab } from "./nomen-tab"
+import type { Catalog, CatalogKind } from "@/lib/catalog"
 import { CodesLegend } from "./codes-legend"
 import { cn } from "@/lib/utils"
 import { DATE_LEN, isPeriod, nomenParts } from "@/lib/nomenclature"
@@ -98,6 +99,9 @@ export function RenamePanel({
   regexError,
   applying,
   onApply,
+  catalog,
+  canEditCatalog,
+  onCreateCatalogEntry,
 }: {
   rule: RenameRule
   onRule: (r: RenameRule) => void
@@ -105,6 +109,9 @@ export function RenamePanel({
   regexError: boolean
   applying: { done: number; total: number } | null
   onApply: () => void
+  catalog: Catalog
+  canEditCatalog: boolean
+  onCreateCatalogEntry: (kind: CatalogKind) => void
 }) {
   const set = <K extends keyof RenameRule>(key: K, value: Partial<RenameRule[K]>) =>
     onRule({ ...rule, [key]: typeof value === "object" ? { ...(rule[key] as object), ...value } : value })
@@ -135,7 +142,7 @@ export function RenamePanel({
           className="gap-0"
         >
           <div className="flex items-center justify-between gap-2 px-4 pt-3">
-            <CodesLegend />
+            <CodesLegend catalog={catalog} />
             <button
               type="button"
               onClick={() => {
@@ -173,6 +180,9 @@ export function RenamePanel({
                 onChange={(nomen) => onRule({ ...rule, nomen })}
                 example={preview[0]}
                 count={preview.length}
+                catalog={catalog}
+                canEdit={canEditCatalog}
+                onCreate={onCreateCatalogEntry}
               />
             </TabsContent>
 

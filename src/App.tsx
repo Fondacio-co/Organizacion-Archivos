@@ -21,15 +21,27 @@ import { APPLICABLE, RenamePanel } from "@/components/rename-panel"
 import { SignInScreen } from "@/components/sign-in-screen"
 import { createDemoBackend } from "@/lib/demo-drive"
 import { createGoogleBackend, DriveError, SESSION_EXPIRED } from "@/lib/google-drive"
-import { complianceIssue } from "@/lib/nomenclature"
+import { CatalogEntryDialog, type EntryDialogState } from "@/components/catalog-entry-dialog"
+import { ConfigPage, type CatalogStatus } from "@/components/config-page"
+import {
+  DEFAULT_CATALOG,
+  removeEntry,
+  upsertEntry,
+  type Catalog,
+  type CatalogEntry,
+  type CatalogKind,
+} from "@/lib/catalog"
+import { complianceIssue, setCatalog } from "@/lib/nomenclature"
 import { buildPreview, defaultRule, normalize, splitName, type RenameRule } from "@/lib/rename"
-import type {
-  DriveFile,
-  FolderInfo,
-  RenameRequest,
-  RenameResult,
-  ScanProgress,
-  UserInfo,
+import {
+  CatalogConflictError,
+  type CatalogFile,
+  type DriveFile,
+  type FolderInfo,
+  type RenameRequest,
+  type RenameResult,
+  type ScanProgress,
+  type UserInfo,
 } from "@/lib/types"
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined
@@ -115,6 +127,102 @@ export default function App() {
     } else toast.error(message(e))
   }
 
+  /* ---------- Catálogo de códigos (bloques y tipos), compartido en Drive ---------- */
+
+  const [catalog, setCatalogState] = useState<Catalog>(DEFAULT_CATALOG)
+  const [catalogFile, setCatalogFile] = useState<CatalogFile | null>(null)
+  const [catalogStatus, setCatalogStatus] = useState<CatalogStatus>("loading")
+  const [catalogError, setCatalogError] = useState<string>()
+  const [entryDialog, setEntryDialog] = useState<EntryDialogState | null>(null)
+  /** Si el formulario se abrió desde la pestaña Nomenclatura, el código creado queda elegido */
+  const [entryFromNomen, setEntryFromNomen] = useState(false)
+
+  /** Cambia el catálogo para las reglas de nombres y para la pantalla a la vez */
+  const applyCatalog = (c: Catalog) => {
+    setCatalog(c)
+    setCatalogState(c)
+  }
+
+  const loadCatalog = useCallback(async () => {
+    setCatalogStatus("loading")
+    setCatalogError(undefined)
+    try {
+      const f = await backend.loadCatalog()
+      setCatalogFile(f)
+      applyCatalog(f?.catalog ?? DEFAULT_CATALOG)
+      setCatalogStatus(!f ? "missing" : !f.catalog ? "damaged" : "ready")
+    } catch (e) {
+      // sin catálogo la página sigue funcionando con los códigos de fábrica
+      applyCatalog(DEFAULT_CATALOG)
+      setCatalogStatus("error")
+      setCatalogError(message(e))
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user) loadCatalog()
+  }, [user?.email, loadCatalog])
+
+  const createCatalogBase = async () => {
+    const domain = user?.email.split("@")[1] ?? null
+    const initial: Catalog = { ...catalog, updatedAt: new Date().toISOString(), updatedBy: user?.email }
+    try {
+      const f = await backend.createCatalog(initial, domain)
+      setCatalogFile(f)
+      applyCatalog(f.catalog ?? initial)
+      setCatalogStatus("ready")
+      toast.success("Base de códigos creada", {
+        description: "Quedó en tu Drive y se compartió en solo lectura con toda la organización.",
+      })
+    } catch (e) {
+      showError(e)
+    }
+  }
+
+  /** Guarda el catálogo en Drive; devuelve false si no se pudo */
+  const saveCatalog = async (next: Catalog, okMessage: string): Promise<boolean> => {
+    if (!catalogFile) return false
+    const stamped: Catalog = { ...next, updatedAt: new Date().toISOString(), updatedBy: user?.email }
+    try {
+      const f = await backend.saveCatalog(catalogFile, stamped)
+      setCatalogFile(f)
+      applyCatalog(stamped)
+      toast.success(okMessage)
+      return true
+    } catch (e) {
+      if (e instanceof CatalogConflictError)
+        toast.error(e.message, { duration: 15000, action: { label: "Recargar", onClick: () => loadCatalog() } })
+      else showError(e)
+      return false
+    }
+  }
+
+  const saveEntry = async (k: CatalogKind, entry: CatalogEntry, editing?: string) => {
+    const name = k === "bloques" ? "Bloque" : "Tipo"
+    const ok = await saveCatalog(
+      upsertEntry(catalog, k, entry),
+      editing ? `${name} ${entry.code} actualizado` : `${name} ${entry.code} creado`
+    )
+    if (!ok) return
+    setEntryDialog(null)
+    if (entryFromNomen && !editing) {
+      // queda elegido en la pestaña Nomenclatura, que es desde donde se pidió
+      setRule((r) => ({ ...r, nomen: { ...r.nomen, [k === "bloques" ? "bloque" : "tipo"]: entry.code } }))
+    }
+  }
+
+  const deleteEntry = async (k: CatalogKind, code: string) => {
+    const ok = await saveCatalog(removeEntry(catalog, k, code), `Se eliminó ${code}`)
+    if (!ok) return
+    const field = k === "bloques" ? "bloque" : "tipo"
+    setRule((r) => (r.nomen[field] === code ? { ...r, nomen: { ...r.nomen, [field]: "" } } : r))
+  }
+
+  const openEntryDialog = (k: CatalogKind, entry?: CatalogEntry, fromNomen = false) => {
+    setEntryFromNomen(fromNomen)
+    setEntryDialog({ kind: k, editing: entry })
+  }
+
   /* ---------- Sesión ---------- */
 
   const resetWorkspace = () => {
@@ -147,6 +255,9 @@ export default function App() {
     await backend.signOut()
     setUser(null)
     resetWorkspace()
+    applyCatalog(DEFAULT_CATALOG)
+    setCatalogFile(null)
+    setCatalogStatus("loading")
   }
 
   /* ---------- Carpeta ---------- */
@@ -198,7 +309,7 @@ export default function App() {
       if (issue) m.set(f.id, issue)
     }
     return m
-  }, [files])
+  }, [files, catalog]) // catalog: al crear o borrar un código cambia qué cumple
 
   const { visible, nonCompliantCount } = useMemo(() => {
     const q = normalize(query.trim())
@@ -233,7 +344,7 @@ export default function App() {
   const selectedFiles = useMemo(() => files.filter((f) => selected.has(f.id)), [files, selected])
   const { items: preview, regexError } = useMemo(
     () => buildPreview(selectedFiles, files, rule),
-    [selectedFiles, files, rule]
+    [selectedFiles, files, rule, catalog]
   )
 
   /* ---------- Renombrar ---------- */
@@ -350,6 +461,20 @@ export default function App() {
         <div className="grid min-h-[60vh] place-items-center text-sm text-muted-foreground">Cargando…</div>
       ) : !user ? (
         <SignInScreen demo={backend.demo} loading={signingIn} onSignIn={() => signIn()} />
+      ) : view === "settings" ? (
+        <main className="px-4 py-8 sm:px-6 sm:py-10">
+          <ConfigPage
+            catalog={catalog}
+            file={catalogFile}
+            status={catalogStatus}
+            errorText={catalogError}
+            demo={backend.demo}
+            onCreateBase={createCatalogBase}
+            onEdit={(k, e) => openEntryDialog(k, e)}
+            onDelete={deleteEntry}
+            onReload={loadCatalog}
+          />
+        </main>
       ) : view === "history" ? (
         <main className="mx-auto grid max-w-5xl gap-4 px-4 py-8 sm:px-6 sm:py-10">
           <div>
@@ -412,6 +537,9 @@ export default function App() {
               regexError={regexError}
               applying={applying}
               onApply={() => setConfirmOpen(true)}
+              catalog={catalog}
+              canEditCatalog={!!catalogFile?.canEdit && catalogStatus === "ready"}
+              onCreateCatalogEntry={(k) => openEntryDialog(k, undefined, true)}
             />
           </div>
         </main>
@@ -446,6 +574,13 @@ export default function App() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CatalogEntryDialog
+        state={entryDialog}
+        catalog={catalog}
+        onClose={() => setEntryDialog(null)}
+        onSave={saveEntry}
+      />
 
       <Toaster position="bottom-right" richColors={false} />
     </div>

@@ -1,12 +1,13 @@
-import { FolderTreeIcon, HistoryIcon, PenLineIcon, type LucideIcon } from "lucide-react"
+import { FolderTreeIcon, HistoryIcon, PenLineIcon, SettingsIcon, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export type View = "folders" | "rename" | "history"
+export type View = "folders" | "rename" | "history" | "settings"
 
 const ITEMS: { view: View; label: string; icon: LucideIcon }[] = [
   { view: "folders", label: "Carpetas", icon: FolderTreeIcon },
   { view: "rename", label: "Renombrar", icon: PenLineIcon },
   { view: "history", label: "Historial", icon: HistoryIcon },
+  { view: "settings", label: "Configuración", icon: SettingsIcon },
 ]
 
 export function AppNav({
