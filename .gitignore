@@ -26,3 +26,6 @@ dist-ssr
 # Variables locales
 .env
 .env.local
+
+# Configuración local del editor
+.claude/

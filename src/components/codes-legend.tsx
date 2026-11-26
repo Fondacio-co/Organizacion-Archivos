@@ -66,7 +66,8 @@ export function CodesLegend() {
 
         <ul className="grid gap-1.5 rounded-lg bg-secondary/60 p-3 text-sm">
           <li>
-            <b>Fecha:</b> año, año-mes o año-mes-día con guiones (2026, 2026-05, 2026-05-30).
+            <b>Fecha:</b> año, año-mes o año-mes-día con guiones (2026, 2026-05, 2026-05-30). Para
+            periodos: semestre (2026-S1, 2026-S2) o rango de años (2024-2026).
           </li>
           <li>
             <b>Descripción:</b> el tema, corto, sin espacios ni tildes y con mayúscula en cada palabra

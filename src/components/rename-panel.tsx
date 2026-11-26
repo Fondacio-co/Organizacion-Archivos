@@ -21,7 +21,7 @@ import { FileKindIcon } from "./file-kind-icon"
 import { NomenTab } from "./nomen-tab"
 import { CodesLegend } from "./codes-legend"
 import { cn } from "@/lib/utils"
-import { DATE_LEN, nomenParts } from "@/lib/nomenclature"
+import { DATE_LEN, isPeriod, nomenParts } from "@/lib/nomenclature"
 
 const STATUS: Record<PreviewStatus, { label: string; className: string } | null> = {
   change: null,
@@ -515,10 +515,12 @@ function StatusBadge({ label, className, status }: { label: string; className: s
   )
 }
 
-const DATE_INPUT: Record<"day" | "month" | "year", { type: string; placeholder?: string }> = {
+const DATE_INPUT: Record<"day" | "month" | "year" | "period", { type: string; placeholder?: string }> = {
   day: { type: "date" },
   month: { type: "month" },
   year: { type: "number", placeholder: "AAAA" },
+  // semestre o rango: no hay calendario para eso, se escribe
+  period: { type: "text", placeholder: "2026-S1" },
 }
 
 const DATE_SOURCE_HINT = {
@@ -548,9 +550,11 @@ function NomenPreviewRow({
   const hint = DATE_SOURCE_HINT[parts.dateSource]
   const dateValue = override.date ?? parts.date
   // En "Como está", el campo se adapta a la fecha que trae el archivo (año, mes o día)
-  const inputKind: "day" | "month" | "year" =
+  const inputKind: "day" | "month" | "year" | "period" =
     nomen.precision === "auto"
-      ? dateValue.length === 4
+      ? isPeriod(parts.date) || /^\d{4}-(S|\d{3})/i.test(override.date ?? "")
+        ? "period"
+        : dateValue.length === 4
         ? "year"
         : dateValue.length === 7
           ? "month"
@@ -573,7 +577,10 @@ function NomenPreviewRow({
       : newName
   const showDate = nomen.precision !== "none" && (nomen.precision !== "auto" || !!dateValue)
   const incompleteDate =
-    !!override.date && override.date.length < DATE_LEN[inputKind]
+    !!override.date &&
+    (inputKind === "period"
+      ? !isPeriod(override.date)
+      : override.date.length < DATE_LEN[inputKind])
 
   const setOverride = (patch: Partial<typeof override>) =>
     onRule({

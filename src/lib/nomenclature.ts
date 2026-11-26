@@ -95,7 +95,8 @@ const CODE_RE = new RegExp(
   `^(?:ADC_)?(?:(${Object.keys(BLOQUES).join("|")})_)?(?:(${Object.keys(TIPOS).join("|")})_)?`,
   "i"
 )
-const DATE_RE = /(?:^|[_\s])(\d{4}(?:-\d{2}(?:-\d{2})?)?)(?=[_\s]|$)/
+/** Fecha o periodo dentro de un nombre: 2026, 2026-05, 2026-05-30, 2026-S1 (semestre), 2024-2026 (rango) */
+const DATE_RE = /(?:^|[_\s])(\d{4}(?:-(?:\d{4}|S[12]|\d{2}(?:-\d{2})?))?)(?=[_\s]|$)/i
 /** Fotos de celular/cámara: IMG_20250312_101522, PXL_20250312… */
 const CAMERA_RE = /^(?:IMG|VID|PXL|DSC|MVIMG)[_-]?(\d{4})(\d{2})(\d{2})/i
 /** Ruido típico: "WhatsApp Image", "Captura de pantalla", "at 10.41.22" */
@@ -137,7 +138,7 @@ export function parseName(base: string): ParsedName {
   } else {
     const d = rest.match(DATE_RE)
     if (d) {
-      out.date = d[1]
+      out.date = d[1].toUpperCase() // 2026-s1 → 2026-S1
       rest = rest.replace(d[0], " ")
     }
   }
@@ -150,11 +151,25 @@ export function parseName(base: string): ParsedName {
   return out
 }
 
-const DATE_ONLY_RE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?)?$/
+/**
+ * Fechas válidas: AAAA, AAAA-MM, AAAA-MM-DD, y también periodos:
+ * AAAA-S1 / AAAA-S2 (semestre) y AAAA-AAAA (rango de años, el segundo mayor).
+ */
+const DATE_ONLY_RE = /^\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?|-S[12]|-\d{4})?$/
+/** Semestre o rango de años */
+const PERIOD_RE = /^\d{4}-(S[12]|\d{4})$/
+
+function isValidDateText(d: string): boolean {
+  if (!DATE_ONLY_RE.test(d)) return false
+  const range = d.match(/^(\d{4})-(\d{4})$/)
+  return !range || Number(range[2]) > Number(range[1])
+}
+
+export const DATE_FORMATS_HELP = "AAAA, AAAA-MM, AAAA-MM-DD, AAAA-S1/S2 (semestre) o AAAA-AAAA (rango)"
 
 /** Explica en palabras simples por qué un nombre no cumple (null si cumple) */
 export function complianceIssue(base: string): string | null {
-  if (VALID_RE.test(base)) return null
+  if (isCompliant(base)) return null
   const p = base.split("_")
   if (p[0] === "ADC") return "Empieza con ADC, que ya no se usa"
   if (!(p[0] in BLOQUES)) return `Falta el bloque al inicio (${Object.keys(BLOQUES).join(", ")})`
@@ -165,20 +180,23 @@ export function complianceIssue(base: string): string | null {
   if (middle.length === 0 || (middle.length === 1 && DATE_ONLY_RE.test(middle[0])))
     return "Falta la descripción"
   if (middle.length > 2) return "La descripción va junta, sin guiones bajos"
-  if (middle.length === 2 && !DATE_ONLY_RE.test(middle[0]))
-    return "La fecha debe ir como AAAA, AAAA-MM o AAAA-MM-DD"
+  if (middle.length === 2 && !isValidDateText(middle[0]))
+    return `La fecha debe ir como ${DATE_FORMATS_HELP}`
   return "La descripción va sin espacios ni tildes, con mayúscula en cada palabra"
 }
 
 const VALID_RE = new RegExp(
   `^(${Object.keys(BLOQUES).join("|")})_(${Object.keys(TIPOS).join("|")})_` +
-    `(\\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\\d|3[01]))?)?_)?` +
+    `(?<date>\\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\\d|3[01]))?|-S[12]|-\\d{4})?_)?` +
     `[A-Z0-9][A-Za-z0-9]*_(v\\d{2}|FINAL)$`
 )
 
 /** ¿El nombre (sin extensión) sigue la nomenclatura? */
 export function isCompliant(base: string): boolean {
-  return VALID_RE.test(base)
+  const m = base.match(VALID_RE)
+  if (!m) return false
+  const date = m.groups?.date?.slice(0, -1)
+  return !date || isValidDateText(date)
 }
 
 export const DATE_LEN: Record<Exclude<DatePrecision, "auto">, number> = { day: 10, month: 7, year: 4, none: 0 }
@@ -208,7 +226,10 @@ export function localDate(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-const isValidDate = (d: string) => DATE_ONLY_RE.test(d)
+const isValidDate = isValidDateText
+
+/** ¿Es un semestre (2026-S1) o un rango de años (2024-2026)? */
+export const isPeriod = (d: string) => PERIOD_RE.test(d)
 
 /**
  * Calcula cada parte del nombre de un archivo. Lo que el usuario no eligió
@@ -221,6 +242,8 @@ export function nomenParts(
   override: NomenOverride = {}
 ): NomenParts {
   const parsed = parseName(currentBase)
+  // "2026-s1" escrito a mano cuenta como "2026-S1"
+  if (override.date) override = { ...override, date: override.date.trim().toUpperCase() }
   const bloque = rule.bloque || parsed.bloque || ""
   const tipo = rule.tipo || parsed.tipo || ""
 
@@ -234,9 +257,12 @@ export function nomenParts(
   } else {
     const len = DATE_LEN[rule.precision]
     if (len) {
+      // un periodo (2026-S1, 2024-2026) solo se puede recortar a año; para mes o día no sirve
+      const fromName =
+        parsed.date && (isPeriod(parsed.date) ? len === 4 : parsed.date.length >= len)
       if (override.date && override.date.length >= len) [date, dateSource] = [override.date, "manual"]
       else if (rule.date) [date, dateSource] = [rule.date, "global"]
-      else if (parsed.date && parsed.date.length >= len) [date, dateSource] = [parsed.date, "name"]
+      else if (fromName) [date, dateSource] = [parsed.date!, "name"]
       else [date, dateSource] = [localDate(modifiedTime), "file"]
       date = date.slice(0, len)
     }

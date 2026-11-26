@@ -49,6 +49,24 @@ describe("isCompliant / complianceIssue", () => {
   })
 
   it.each([
+    "GEN_IRE_2026-S1_PresentacionResultados_v01",
+    "GEN_IRE_2026-S2_PresentacionResultados_FINAL",
+    "GEN_IRE_2024-2026_MejorasYObrasCasa_v01",
+  ])("acepta periodos: %s", (n) => {
+    expect(isCompliant(n)).toBe(true)
+    expect(complianceIssue(n)).toBeNull()
+  })
+
+  it.each([
+    ["GEN_IRE_2026-S3_Algo_v01", "fecha"],
+    ["GEN_IRE_2026-2024_Algo_v01", "fecha"],
+    ["GEN_IRE_2026-S1_Presentacion_Resultados_v01", "junta"],
+  ])("rechaza periodos mal escritos: %s", (n, word) => {
+    expect(isCompliant(n)).toBe(false)
+    expect(complianceIssue(n)?.toLowerCase()).toContain(word)
+  })
+
+  it.each([
     ["ADC_CAM_IAC_2026-05-30_JornadaSiembra_v01", "ADC"],
     ["CAM_IAC_2026-05-30_JornadaSiembra", "versión"],
     ["XYZ_IAC_2026_Algo_v01", "bloque"],
@@ -147,6 +165,22 @@ describe("buildNomenName (sugerencia automática)", () => {
     const p = nomenParts("CAM_IAC_Algo", "2026-11-26T03:00:00Z", rule())
     expect(p.date).toBe("2026-11-25")
     expect(p.dateSource).toBe("file")
+  })
+  it("respeta semestres y rangos de años en vez de cambiarlos por la fecha del archivo", () => {
+    expect(build("GEN_IRE_2026-S1_PresentacionResultados_v01")).toBe("GEN_IRE_2026-S1_PresentacionResultados_v01")
+    expect(build("GEN_IRE_2024-2026_MejorasYObrasCasa_v01")).toBe("GEN_IRE_2024-2026_MejorasYObrasCasa_v01")
+    expect(build("informe gen ire 2026-s2 resultados", { bloque: "GEN", tipo: "IRE" })).toBe(
+      "GEN_IRE_2026-S2_InformeGenIreResultados_v01"
+    )
+  })
+  it("con precisión Año un periodo se recorta al año; con Mes o Día usa la fecha del archivo", () => {
+    expect(build("GEN_IRE_2026-S1_Algo_v01", { precision: "year" })).toBe("GEN_IRE_2026_Algo_v01")
+    expect(build("GEN_IRE_2024-2026_Algo_v01", { precision: "month" })).toBe("GEN_IRE_2026-11_Algo_v01")
+  })
+  it("un semestre escrito a mano en minúscula se acepta", () => {
+    const p = nomenParts("GEN_IRE_Algo_v01", MOD, rule(), { date: "2026-s2" })
+    expect(p.date).toBe("2026-S2")
+    expect(p.missing).toBeNull()
   })
   it("una fecha imposible en el nombre no se acepta como buena", () => {
     const p = nomenParts("CAM_IAC_2026-13-01_Algo_v01", MOD, rule())

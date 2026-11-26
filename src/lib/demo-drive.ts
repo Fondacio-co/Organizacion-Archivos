@@ -20,6 +20,8 @@ const MIME: Record<string, string> = {
 const SAMPLE: [path: string, name: string, type: string, locked?: boolean][] = [
   ["", "GEN_MAN_GuiaOrganizacionNomenclatura_v01", "gdoc"],
   ["", "CAM_IAC_2026-05-30_JornadaSiembra_v01.pdf", "pdf"],
+  ["", "GEN_IRE_2026-S1_Presentacion_Resultados_v01", "gdoc"],
+  ["", "GEN_IRE_2024-2026_MejorasYObrasCasa_v01", "gdoc"],
   ["", "Informe mensual enero 2025.pdf", "pdf"],
   ["", "informe mensual febrero 2025.pdf", "pdf"],
   ["", "Informe Mensual MARZO 2025 (1).pdf", "pdf"],
