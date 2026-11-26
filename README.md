@@ -35,7 +35,8 @@ Está hecha con React, Vite y shadcn/ui. Funciona solo en el navegador: no hay s
 Los bloques y tipos se administran desde la pestaña **Configuración** de la página, no desde el código:
 
 - Se guardan en un archivo **`Organizacion de Archivos - codigos.json`** en el Drive de la Fundación, que hace de base de datos: todos los computadores leen el mismo archivo al iniciar sesión.
-- **Administradores** = quienes tienen permiso de **edición** sobre ese archivo. Pueden crear, editar (nombre, color y "va sin fecha") y eliminar códigos. Para nombrar a otro administrador, se le comparte el archivo como *Editor* en Drive. Los demás lo ven en solo lectura.
+- **Administradores** = quienes tienen permiso de **edición** sobre ese archivo. Pueden crear, editar (nombre, color y "va sin fecha") y eliminar códigos, y en la sección **Administradores** de Configuración **agregar o quitar** a otros administradores (la página comparte o retira el permiso de Editor en Drive y Google avisa por correo). Los demás ven los códigos en solo lectura.
+- **Administradores por defecto:** `pruebas_ucatolica@fondacio-co.org` y `s.guerrero@fondacio-co.org` (`DEFAULT_ADMINS` en `src/lib/catalog.ts`). Al crear la base se les comparte automáticamente como Editor, además de a quien la crea.
 - **Primera vez:** si el archivo no existe, en Configuración aparece **Crear base de códigos**. Lo crea en el Drive de quien pulsa el botón, con los códigos de fábrica, y lo comparte en solo lectura con todo el dominio `@fondacio-co.org`. Se puede mover luego a una unidad compartida sin que se pierda (la página lo encuentra por una marca interna, no por su ubicación).
 - El **código** (3 letras) no se puede cambiar después de creado, porque los archivos que lo usan quedarían sin nomenclatura. Al **eliminar** uno, los archivos que lo usan no se tocan en Drive, pero pasan a ⚠️.
 - Si dos administradores guardan a la vez, la página lo detecta y pide recargar en vez de pisar el cambio del otro.

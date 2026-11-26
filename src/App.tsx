@@ -21,6 +21,7 @@ import { APPLICABLE, RenamePanel } from "@/components/rename-panel"
 import { SignInScreen } from "@/components/sign-in-screen"
 import { createDemoBackend } from "@/lib/demo-drive"
 import { createGoogleBackend, DriveError, SESSION_EXPIRED } from "@/lib/google-drive"
+import { AdminsSection } from "@/components/admins-section"
 import { CatalogEntryDialog, type EntryDialogState } from "@/components/catalog-entry-dialog"
 import { ConfigPage, type CatalogStatus } from "@/components/config-page"
 import {
@@ -35,6 +36,7 @@ import { complianceIssue, setCatalog } from "@/lib/nomenclature"
 import { buildPreview, defaultRule, normalize, splitName, type RenameRule } from "@/lib/rename"
 import {
   CatalogConflictError,
+  type CatalogAdmin,
   type CatalogFile,
   type DriveFile,
   type FolderInfo,
@@ -216,6 +218,51 @@ export default function App() {
     if (!ok) return
     const field = k === "bloques" ? "bloque" : "tipo"
     setRule((r) => (r.nomen[field] === code ? { ...r, nomen: { ...r.nomen, [field]: "" } } : r))
+  }
+
+  /* ---------- Administradores de los códigos ---------- */
+
+  /** null = cargando; solo se consultan si la cuenta es administradora */
+  const [admins, setAdmins] = useState<CatalogAdmin[] | null>(null)
+
+  const loadAdmins = useCallback(async (f: CatalogFile) => {
+    setAdmins(null)
+    try {
+      setAdmins(await backend.listAdmins(f))
+    } catch (e) {
+      setAdmins([])
+      toast.error(`No se pudo leer la lista de administradores: ${message(e)}`)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (catalogFile?.canEdit) loadAdmins(catalogFile)
+    // solo cuando cambia el archivo o el permiso, no en cada guardado de códigos
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogFile?.id, catalogFile?.canEdit, loadAdmins])
+
+  const addAdmin = async (email: string): Promise<boolean> => {
+    if (!catalogFile) return false
+    try {
+      await backend.addAdmin(catalogFile, email)
+      toast.success(`${email} ahora es administrador`, { description: "Google le enviará un correo de aviso." })
+      await loadAdmins(catalogFile)
+      return true
+    } catch (e) {
+      showError(e)
+      return false
+    }
+  }
+
+  const removeAdmin = async (admin: CatalogAdmin) => {
+    if (!catalogFile) return
+    try {
+      await backend.removeAdmin(catalogFile, admin)
+      toast.success(`${admin.email} ya no es administrador`)
+      await loadAdmins(catalogFile)
+    } catch (e) {
+      showError(e)
+    }
   }
 
   const openEntryDialog = (k: CatalogKind, entry?: CatalogEntry, fromNomen = false) => {
@@ -473,6 +520,17 @@ export default function App() {
             onEdit={(k, e) => openEntryDialog(k, e)}
             onDelete={deleteEntry}
             onReload={loadCatalog}
+            adminsSection={
+              user && (
+                <AdminsSection
+                  admins={admins}
+                  currentEmail={user.email}
+                  domain={backend.demo ? null : (user.email.split("@")[1] ?? null)}
+                  onAdd={addAdmin}
+                  onRemove={removeAdmin}
+                />
+              )
+            }
           />
         </main>
       ) : view === "history" ? (

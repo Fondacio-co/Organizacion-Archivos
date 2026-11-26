@@ -88,6 +88,16 @@ export interface CatalogFile {
   webViewLink?: string
 }
 
+/** Una persona con permiso de edición sobre el .json (administradora) */
+export interface CatalogAdmin {
+  /** Id del permiso en Drive (para quitarlo) */
+  permissionId: string
+  email: string
+  name?: string
+  /** owner = propietaria del archivo; inherited = viene de la unidad compartida (no se quita aquí) */
+  kind: "owner" | "editor" | "inherited"
+}
+
 /** Otra persona guardó el catálogo mientras tú lo editabas */
 export class CatalogConflictError extends Error {
   constructor() {
@@ -118,6 +128,12 @@ export interface DriveBackend {
   createCatalog(catalog: Catalog, domain: string | null): Promise<CatalogFile>
   /** Guarda cambios; falla con CatalogConflictError si otra persona lo cambió antes */
   saveCatalog(file: CatalogFile, catalog: Catalog): Promise<CatalogFile>
+  /** Quiénes pueden editar el .json (solo lo pueden consultar los administradores) */
+  listAdmins(file: CatalogFile): Promise<CatalogAdmin[]>
+  /** Comparte el .json como Editor con ese correo y le avisa por correo */
+  addAdmin(file: CatalogFile, email: string): Promise<void>
+  /** Le quita el permiso de edición (vuelve a solo lectura por el dominio) */
+  removeAdmin(file: CatalogFile, admin: CatalogAdmin): Promise<void>
 }
 
 export function kindFromMime(mime: string): FileKind {

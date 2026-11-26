@@ -1,5 +1,5 @@
 import { DEFAULT_CATALOG } from "./catalog"
-import { CatalogConflictError, kindFromMime, type CatalogFile, type DriveBackend, type DriveFile, type FolderEntry } from "./types"
+import { CatalogConflictError, kindFromMime, type CatalogAdmin, type CatalogFile, type DriveBackend, type DriveFile, type FolderEntry } from "./types"
 
 /* Datos de ejemplo para ver y probar la página sin conectar una cuenta real. */
 
@@ -103,6 +103,12 @@ export function createDemoBackend(): DriveBackend {
     { email: "demo@ejemplo.com", name: "Cuenta de demostración" },
     { email: "otra.cuenta@ejemplo.com", name: "Otra cuenta" },
   ]
+  /** Administradores del catálogo de ejemplo (correos ficticios) */
+  let admins: CatalogAdmin[] = [
+    { permissionId: "p-owner", email: "demo@ejemplo.com", name: "Cuenta de demostración", kind: "owner" },
+    { permissionId: "p-coord", email: "coordinacion@ejemplo.com", name: "Coordinación", kind: "editor" },
+  ]
+  const isAdmin = () => admins.some((a) => a.email === ACCOUNTS[account].email)
 
   return {
     demo: true,
@@ -178,7 +184,7 @@ export function createDemoBackend(): DriveBackend {
     async loadCatalog() {
       await wait(200)
       if (!catalogFile) return null
-      return { ...catalogFile, canEdit: account === 0 }
+      return { ...catalogFile, canEdit: isAdmin() }
     },
     async createCatalog(catalog) {
       await wait(400)
@@ -188,9 +194,24 @@ export function createDemoBackend(): DriveBackend {
     async saveCatalog(file, catalog) {
       await wait(300)
       if (!catalogFile || file.version !== catalogFile.version) throw new CatalogConflictError()
-      if (account !== 0) throw new Error("Tu cuenta no puede editar los códigos.")
+      if (!isAdmin()) throw new Error("Tu cuenta no puede editar los códigos.")
       catalogFile = { ...catalogFile, catalog, version: String(Number(catalogFile.version) + 1) }
       return { ...catalogFile, canEdit: true }
+    },
+    async listAdmins() {
+      await wait(200)
+      return [...admins]
+    },
+    async addAdmin(_file, email) {
+      await wait(300)
+      const clean = email.trim().toLowerCase()
+      if (!admins.some((a) => a.email === clean))
+        admins = [...admins, { permissionId: `p-${clean}`, email: clean, kind: "editor" }]
+    },
+    async removeAdmin(_file, admin) {
+      await wait(300)
+      if (admin.kind === "owner") throw new Error("No se puede quitar a la propietaria del archivo.")
+      admins = admins.filter((a) => a.permissionId !== admin.permissionId)
     },
   }
 }

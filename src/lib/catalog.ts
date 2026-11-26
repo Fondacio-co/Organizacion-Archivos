@@ -25,6 +25,16 @@ export interface Catalog {
   updatedBy?: string
 }
 
+/**
+ * Administradores por defecto: al crear la base de códigos se les comparte
+ * el archivo como Editor automáticamente (además de quien la crea).
+ * Después, desde Configuración, cualquier administrador puede agregar a más personas.
+ */
+export const DEFAULT_ADMINS = ["pruebas_ucatolica@fondacio-co.org", "s.guerrero@fondacio-co.org"]
+
+/** Formato básico de correo */
+export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim())
+
 /** Colores para elegir: la paleta de la Fundación y tonos que se distinguen bien */
 export const PALETTE = [
   "#3B3183", // índigo

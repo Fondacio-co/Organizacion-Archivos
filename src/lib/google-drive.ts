@@ -1,4 +1,4 @@
-import { parseCatalog, type Catalog } from "./catalog"
+import { DEFAULT_ADMINS, parseCatalog, type Catalog } from "./catalog"
 import {
   CatalogConflictError,
   kindFromMime,
@@ -220,6 +220,7 @@ export function createGoogleBackend(clientId: string): DriveBackend {
       }
       throw new DriveError(friendlyError(res.status, reason, message), res.status)
     }
+    if (res.status === 204) return undefined as T // DELETE no devuelve contenido
     return res.json() as Promise<T>
   }
 
@@ -407,6 +408,13 @@ export function createGoogleBackend(clientId: string): DriveBackend {
           /* si el dominio no permite compartir así, el administrador lo comparte a mano */
         })
       }
+      // Administradores por defecto (además de quien la crea)
+      for (const email of DEFAULT_ADMINS) {
+        if (email.toLowerCase() === user?.email.toLowerCase()) continue
+        await shareAsEditor(raw.id, email).catch(() => {
+          /* si falla (ej. el correo no existe), se puede agregar luego desde Configuración */
+        })
+      }
       const fresh = await api<RawCatalogFile>(
         `/files/${encodeURIComponent(raw.id)}?supportsAllDrives=true&fields=${CATALOG_FIELDS}`
       )
@@ -431,6 +439,67 @@ export function createGoogleBackend(clientId: string): DriveBackend {
       )
       return toCatalogFile(raw, catalog)
     },
+
+    async listAdmins(file) {
+      const res = await api<{
+        permissions: {
+          id: string
+          type: string
+          role: string
+          emailAddress?: string
+          displayName?: string
+          permissionDetails?: { inherited?: boolean }[]
+        }[]
+      }>(
+        `/files/${encodeURIComponent(file.id)}/permissions?supportsAllDrives=true&fields=permissions(id,type,role,emailAddress,displayName,permissionDetails(inherited))`
+      )
+      const EDIT_ROLES = new Set(["owner", "organizer", "fileOrganizer", "writer"])
+      return res.permissions
+        .filter((p) => (p.type === "user" || p.type === "group") && p.emailAddress && EDIT_ROLES.has(p.role))
+        .map((p) => ({
+          permissionId: p.id,
+          email: p.emailAddress!,
+          name: p.displayName,
+          kind:
+            p.role === "owner"
+              ? ("owner" as const)
+              : p.permissionDetails?.length && p.permissionDetails.every((d) => d.inherited)
+                ? ("inherited" as const)
+                : ("editor" as const),
+        }))
+        .sort((a, b) => a.email.localeCompare(b.email))
+    },
+
+    async addAdmin(file, email) {
+      await shareAsEditor(file.id, email.trim().toLowerCase())
+    },
+
+    async removeAdmin(file, admin) {
+      if (admin.kind !== "editor")
+        throw new Error(
+          admin.kind === "owner"
+            ? "No se puede quitar a la propietaria del archivo."
+            : "Este permiso viene de la unidad compartida: quítalo desde los miembros de la unidad en Drive."
+        )
+      await api(
+        `/files/${encodeURIComponent(file.id)}/permissions/${encodeURIComponent(admin.permissionId)}?supportsAllDrives=true`,
+        { method: "DELETE" }
+      )
+    },
+  }
+
+  /** Comparte el .json como Editor y le avisa por correo a la persona */
+  async function shareAsEditor(fileId: string, email: string) {
+    const params = new URLSearchParams({
+      supportsAllDrives: "true",
+      sendNotificationEmail: "true",
+      emailMessage:
+        "Ahora eres administrador(a) de los códigos de bloque y tipo de la herramienta Organización de Archivos (https://organizacion-archivos.vercel.app). Puedes gestionarlos en la pestaña Configuración.",
+    })
+    await api(`/files/${encodeURIComponent(fileId)}/permissions?${params}`, {
+      method: "POST",
+      body: JSON.stringify({ type: "user", role: "writer", emailAddress: email }),
+    })
   }
 
   /**

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import {
   DatabaseIcon,
   ExternalLinkIcon,
@@ -39,6 +39,7 @@ export function ConfigPage({
   onEdit,
   onDelete,
   onReload,
+  adminsSection,
 }: {
   catalog: Catalog
   file: CatalogFile | null
@@ -50,6 +51,8 @@ export function ConfigPage({
   onEdit: (kind: CatalogKind, entry?: CatalogEntry) => void
   onDelete: (kind: CatalogKind, code: string) => Promise<void>
   onReload: () => void
+  /** Sección de administradores (solo se muestra a administradores) */
+  adminsSection?: ReactNode
 }) {
   const canEdit = !!file?.canEdit && status === "ready"
   const [creating, setCreating] = useState(false)
@@ -111,7 +114,7 @@ export function ConfigPage({
               </p>
               <p className="text-sm text-muted-foreground">
                 {canEdit
-                  ? "Puedes crear, editar y eliminar códigos. Para nombrar otro administrador, compártele el archivo como Editor en Drive."
+                  ? "Puedes crear, editar y eliminar códigos, y agregar a otros administradores más abajo."
                   : "Solo los administradores pueden cambiar los códigos. Si necesitas uno nuevo, pídeselo a quien administra el archivo."}
                 {catalog.updatedAt && (
                   <span className="block text-xs">
@@ -157,6 +160,8 @@ export function ConfigPage({
           )}
         </div>
       </section>
+
+      {canEdit && adminsSection}
 
       <div className="grid items-start gap-5 lg:grid-cols-2">
         {(["bloques", "tipos"] as const).map((kind) => (

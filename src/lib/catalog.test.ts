@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest"
 import {
+  DEFAULT_ADMINS,
   DEFAULT_CATALOG,
   entryError,
+  isEmail,
   parseCatalog,
   removeEntry,
   similarCode,
@@ -65,6 +67,18 @@ describe("crear, editar y eliminar", () => {
     expect(removeEntry(DEFAULT_CATALOG, "bloques", "SOS").bloques.some((b) => b.code === "SOS")).toBe(false)
     const one = { ...DEFAULT_CATALOG, bloques: [DEFAULT_CATALOG.bloques[0]] }
     expect(() => removeEntry(one, "bloques", one.bloques[0].code)).toThrow()
+  })
+})
+
+describe("administradores", () => {
+  it("por defecto son la cuenta del proyecto y Soraya Guerrero", () => {
+    expect(DEFAULT_ADMINS).toEqual(["pruebas_ucatolica@fondacio-co.org", "s.guerrero@fondacio-co.org"])
+    expect(DEFAULT_ADMINS.every(isEmail)).toBe(true)
+  })
+  it("valida el formato del correo a agregar", () => {
+    expect(isEmail("nueva.persona@fondacio-co.org")).toBe(true)
+    expect(isEmail("sin-arroba.fondacio-co.org")).toBe(false)
+    expect(isEmail("con espacio@fondacio-co.org")).toBe(false)
   })
 })
 
