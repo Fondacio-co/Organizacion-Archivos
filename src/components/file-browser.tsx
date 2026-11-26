@@ -1,4 +1,14 @@
-import { CircleCheckIcon, CornerDownRightIcon, LockIcon, SearchIcon, TriangleAlertIcon, XIcon } from "lucide-react"
+import {
+  CircleCheckIcon,
+  CopyIcon,
+  CornerDownRightIcon,
+  LockIcon,
+  SearchIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react"
+import type { DuplicateInfo } from "@/lib/duplicates"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -63,6 +73,11 @@ export function FileBrowser({
   nonCompliantCount,
   onlyNonCompliant,
   onOnlyNonCompliant,
+  duplicates,
+  duplicateCount,
+  onlyDuplicates,
+  onOnlyDuplicates,
+  onDeleteSelected,
   onQuery,
   onKind,
   onIncludeSubfolders,
@@ -85,6 +100,13 @@ export function FileBrowser({
   nonCompliantCount: number
   onlyNonCompliant: boolean
   onOnlyNonCompliant: (v: boolean) => void
+  /** Archivos duplicados (copias idénticas o mismo nombre) */
+  duplicates: Map<string, DuplicateInfo>
+  duplicateCount: number
+  onlyDuplicates: boolean
+  onOnlyDuplicates: (v: boolean) => void
+  /** Manda los seleccionados a la papelera (pide confirmación) */
+  onDeleteSelected: () => void
   onQuery: (q: string) => void
   onKind: (k: KindFilter) => void
   onIncludeSubfolders: (v: boolean) => void
@@ -172,6 +194,20 @@ export function FileBrowser({
             {onlyNonCompliant && <XIcon className="size-3" />}
           </button>
         )}
+        {!loading && (duplicateCount > 0 || onlyDuplicates) && (
+          <button
+            type="button"
+            onClick={() => onOnlyDuplicates(!onlyDuplicates)}
+            title="Copias idénticas (mismo contenido) o archivos con el mismo nombre"
+            className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap transition-colors ${
+              onlyDuplicates ? "bg-success text-white" : "bg-success-soft text-success hover:bg-brand-teal/15"
+            }`}
+          >
+            <CopyIcon className="size-3" />
+            {onlyDuplicates ? "Mostrando" : ""} {duplicateCount} duplicados
+            {onlyDuplicates && <XIcon className="size-3" />}
+          </button>
+        )}
         {totalSelected > 0 && (
           <span className="flex items-center gap-2 whitespace-nowrap text-primary">
             {totalSelected} {totalSelected === 1 ? "seleccionado" : "seleccionados"}
@@ -182,6 +218,14 @@ export function FileBrowser({
             )}
             <Button variant="ghost" size="xs" onClick={onClearSelection} className="text-muted-foreground">
               Quitar selección
+            </Button>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={onDeleteSelected}
+              className="border-brand-magenta/30 text-brand-magenta hover:bg-danger-soft hover:text-brand-magenta"
+            >
+              <Trash2Icon /> Eliminar
             </Button>
           </span>
         )}
@@ -264,6 +308,12 @@ export function FileBrowser({
                       </p>
                       {onlyNonCompliant && issues.has(f.id) && (
                         <p className="truncate text-xs text-warning">{issues.get(f.id)}</p>
+                      )}
+                      {onlyDuplicates && duplicates.has(f.id) && (
+                        <p className="flex items-center gap-1 truncate text-xs text-success">
+                          <CopyIcon className="size-3 shrink-0" />
+                          {duplicates.get(f.id)!.reason}
+                        </p>
                       )}
                     </div>
                     <span className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground tabular-nums md:block">

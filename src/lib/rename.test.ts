@@ -16,6 +16,7 @@ function file(name: string, opts: Partial<DriveFile> = {}): DriveFile {
     path: "",
     modifiedTime: "2026-11-20T15:00:00Z",
     canRename: true,
+    canTrash: true,
     ...opts,
   }
 }
@@ -97,8 +98,8 @@ describe("buildPreview — Nomenclatura", () => {
     const fs = [file("IMG_20250312_101522.jpg"), file("IMG_20250312_101548.jpg")]
     const { items } = buildPreview(fs, fs, nomen({ bloque: "CAM", tipo: "MAT", description: "foto siembra" }))
     expect(items.map((i) => i.newName)).toEqual([
-      "CAM_MAT_2025-03-12_FotoSiembra01_v01.jpg",
-      "CAM_MAT_2025-03-12_FotoSiembra02_v01.jpg",
+      "CAM_MAT_2025-03-12_FotoSiembra01.jpg",
+      "CAM_MAT_2025-03-12_FotoSiembra02.jpg",
     ])
     expect(items.every((i) => i.status === "change")).toBe(true)
   })

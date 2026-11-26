@@ -77,7 +77,8 @@ export function CodesLegend({ catalog }: { catalog: Catalog }) {
             (JornadaSiembra). La página la arma sola.
           </li>
           <li>
-            <b>Versión:</b> v01, v02… o FINAL cuando está aprobado.
+            <b>Versión (opcional):</b> v01, v02… o FINAL cuando está aprobado. Los códigos de bloque y tipo
+            tienen entre 2 y 4 letras.
           </li>
         </ul>
       </DialogContent>

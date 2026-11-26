@@ -43,6 +43,9 @@ describe("isCompliant / complianceIssue", () => {
     "GEN_MAN_GuiaOrganizacionNomenclatura_v01",
     "GEN_BDD_2026_EquivalenciasNombres_v01",
     "FOR_ACT_2026-05_ReunionEquipo_FINAL",
+    "CAM_IAC_2026-05-30_JornadaSiembra", // la versión es opcional
+    "GEN_MAN_GuiaUso",
+    "FOR_ACT_2026_ReunionEquipo_v12",
   ])("acepta %s", (n) => {
     expect(isCompliant(n)).toBe(true)
     expect(complianceIssue(n)).toBeNull()
@@ -68,7 +71,7 @@ describe("isCompliant / complianceIssue", () => {
 
   it.each([
     ["ADC_CAM_IAC_2026-05-30_JornadaSiembra_v01", "ADC"],
-    ["CAM_IAC_2026-05-30_JornadaSiembra", "versión"],
+    ["CAM_IAC_2026-05-30_JornadaSiembra_v1", "versión va como"],
     ["XYZ_IAC_2026_Algo_v01", "bloque"],
     ["CAM_XXX_2026_Algo_v01", "tipo"],
     ["GEN_MAT_2026-05_TiempoComunitario_ElPerdon_v01", "junta"],
@@ -142,10 +145,16 @@ describe("buildNomenName (sugerencia automática)", () => {
     expect(nomenParts("Informe", MOD, rule({ bloque: "CAM" })).missing).toBe("Elige el tipo")
   })
   it("manuales, fichas y formatos sin fecha no reciben una", () => {
-    expect(build("GEN_MAN_guia uso")).toBe("GEN_MAN_GuiaUso_v01")
+    expect(build("GEN_MAN_guia uso")).toBe("GEN_MAN_GuiaUso")
   })
   it("el bloque elegido reemplaza al que traía", () => {
     expect(build("GEN_MAT_2026-05_Algo_v01", { bloque: "FOR" })).toBe("FOR_MAT_2026-05_Algo_v01")
+  })
+  it("la versión es opcional: Actual no agrega una si no tiene, y Sin versión la quita", () => {
+    expect(build("CAM_IAC_2026_Jornada")).toBe("CAM_IAC_2026_Jornada")
+    expect(build("CAM_IAC_2026_Jornada_v03")).toBe("CAM_IAC_2026_Jornada_v03")
+    expect(build("CAM_IAC_2026_Jornada_v03", { version: "none" })).toBe("CAM_IAC_2026_Jornada")
+    expect(build("CAM_IAC_2026_Jornada", { version: "v12" })).toBe("CAM_IAC_2026_Jornada_v12")
   })
   it("la versión elegida reemplaza a la actual", () => {
     expect(build("GEN_MAT_2026-05_Algo_v01", { version: "FINAL" })).toBe("GEN_MAT_2026-05_Algo_FINAL")
@@ -158,7 +167,7 @@ describe("buildNomenName (sugerencia automática)", () => {
     const name = buildNomenName("IMG_20250312_101522", MOD, rule({ bloque: "CAM", tipo: "MAT" }), {
       description: "foto de siembra",
     })
-    expect(name).toBe("CAM_MAT_2025-03-12_FotoSiembra_v01")
+    expect(name).toBe("CAM_MAT_2025-03-12_FotoSiembra")
   })
   it("usa la fecha LOCAL del archivo, no la de UTC", () => {
     // 26 nov 03:00 UTC = 25 nov 22:00 en Colombia
@@ -170,7 +179,7 @@ describe("buildNomenName (sugerencia automática)", () => {
     expect(build("GEN_IRE_2026-S1_PresentacionResultados_v01")).toBe("GEN_IRE_2026-S1_PresentacionResultados_v01")
     expect(build("GEN_IRE_2024-2026_MejorasYObrasCasa_v01")).toBe("GEN_IRE_2024-2026_MejorasYObrasCasa_v01")
     expect(build("informe gen ire 2026-s2 resultados", { bloque: "GEN", tipo: "IRE" })).toBe(
-      "GEN_IRE_2026-S2_InformeGenIreResultados_v01"
+      "GEN_IRE_2026-S2_InformeGenIreResultados"
     )
   })
   it("con precisión Año un periodo se recorta al año; con Mes o Día usa la fecha del archivo", () => {

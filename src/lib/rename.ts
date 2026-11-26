@@ -1,6 +1,15 @@
 import type { DriveFile } from "./types"
 
-import { buildNomenName, defaultNomen, isCompliant, isTipo, localDate, nomenParts, type NomenRule } from "./nomenclature"
+import {
+  buildNomenName,
+  defaultNomen,
+  isCompliant,
+  isTipo,
+  localDate,
+  nomenParts,
+  VERSION_FORMAT,
+  type NomenRule,
+} from "./nomenclature"
 
 export type RenameMode = "nomen" | "rename" | "replace" | "affix" | "number" | "format" | "manual"
 
@@ -211,10 +220,12 @@ export function buildPreview(
       group.forEach((it, i) => {
         const { base, ext } = splitName({ name: it.newName, native: it.file.native })
         const parts = base.split("_")
-        const desc = parts[parts.length - 2]
+        // la descripción es la última parte, o la penúltima si hay versión
+        const di = VERSION_FORMAT.test(parts[parts.length - 1]) ? parts.length - 2 : parts.length - 1
+        const desc = parts[di]
         // sin descripción (solo fecha o códigos) no se numera: falta ese dato
         if (parts.length < 4 || /^\d{4}(-\d{2}){0,2}$/.test(desc) || isTipo(desc)) return
-        parts[parts.length - 2] = desc + String(i + 1).padStart(digits, "0")
+        parts[di] = desc + String(i + 1).padStart(digits, "0")
         it.newName = parts.join("_") + ext
       })
     }

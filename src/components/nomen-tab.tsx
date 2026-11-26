@@ -14,6 +14,7 @@ import {
   type NomenRule,
   type Tipo,
   type VersionChoice,
+  VERSIONS,
 } from "@/lib/nomenclature"
 import { splitName, type PreviewItem } from "@/lib/rename"
 
@@ -25,15 +26,13 @@ const PRECISIONS: [DatePrecision, string][] = [
   ["none", "Sin fecha"],
 ]
 
-const VERSION_LABELS: Record<VersionChoice, string> = {
-  keep: "Actual (v01 si no tiene)",
-  v01: "v01",
-  v02: "v02",
-  v03: "v03",
-  v04: "v04",
-  v05: "v05",
-  FINAL: "FINAL (aprobado)",
-}
+/** La versión es opcional: Actual (la que tenga, o ninguna), Sin versión, v01…v20, FINAL */
+const VERSION_LABELS: Record<VersionChoice, string> = Object.fromEntries(
+  VERSIONS.map((v) => [
+    v,
+    v === "keep" ? "Actual (la que tenga, o ninguna)" : v === "none" ? "Sin versión" : v === "FINAL" ? "FINAL (aprobado)" : v,
+  ])
+)
 
 /** "keep" = mantener el bloque/tipo que ya trae cada archivo */
 const KEEP = "keep"

@@ -15,20 +15,22 @@ Está hecha con React, Vite y shadcn/ui. Funciona solo en el navegador: no hay s
 
 - **Carpetas:** al iniciar sesión muestra Mi unidad, las unidades compartidas y lo compartido con la cuenta. Se navega con clic y se pulsa **Ordenar esta carpeta** (lee la carpeta y sus subcarpetas, hasta 5.000 archivos).
 - **Revisión:** cada archivo aparece con ✅ si cumple la regla o ⚠️ con el motivo si no. El botón **«N sin nomenclatura»** muestra solo los que faltan.
+- **Duplicados:** el botón **«N duplicados»** muestra, agrupados, las **copias idénticas** (mismo contenido según la huella md5 de Drive, aunque tengan otro nombre) y los archivos con el **mismo nombre** y tipo (sin contar extensión, «Copia de» ni «(1)»), aunque estén en otra subcarpeta.
+- **Eliminar:** los archivos seleccionados se envían a la **papelera de Drive** (no se borran para siempre), con confirmación. Se recuperan desde la papelera de Drive (30 días) o con **Restaurar** en el Historial.
 - **Nomenclatura (pestaña principal):** sugiere el nombre corregido reutilizando el bloque, el tipo, la fecha y la versión que ya trae el archivo. Si falta algo (por ejemplo el bloque o la descripción) lo pide. La descripción y la fecha se pueden corregir archivo por archivo en la vista previa.
 - **Más opciones:** Nombre nuevo (con numeración automática), Reemplazar texto, Agregar prefijo o sufijo, Formato y Manual.
 - **Configuración:** los administradores crean, editan y eliminan bloques y tipos (con su color). También se puede crear uno desde la primera opción de los menús Bloque y Tipo («+ Crear nuevo…»).
-- **Seguridad:** vista previa, confirmación que explica qué archivos no se tocarán y por qué, bloqueo de nombres repetidos y de archivos sin permiso, **Historial** con **Deshacer** por lote y registro CSV.
+- **Seguridad:** vista previa, confirmación que explica qué archivos no se tocarán y por qué, bloqueo de nombres repetidos y de archivos sin permiso, **Historial** con **Deshacer** por lote y registro CSV. El historial se filtra **por mes**, **por nombre de archivo** y por acción (renombrados / eliminados).
 
 ### Regla de nombres
 
 | Parte | Valores |
 |---|---|
-| Bloque | FOR, CAM, SOS, BYC, GEN |
+| Bloque | FOR, CAM, SOS, BYC, GEN (los códigos tienen entre 2 y 4 letras) |
 | Tipo | ACT, ADM, BDD, COM, FIC, FMT, IAC, IDO, INC, IRE, MAN, MAT, PRY (MAN, FMT y FIC van sin fecha) |
 | Fecha | `2026`, `2026-05`, `2026-05-30`, semestre `2026-S1`/`2026-S2` o rango `2024-2026` |
 | Descripción | Junta, sin tildes, mayúscula en cada palabra: `JornadaSiembra` |
-| Versión | `v01`, `v02`… o `FINAL` |
+| Versión | **Opcional**: `v01`, `v02`… (hasta v99) o `FINAL`; se puede elegir «Sin versión» |
 
 ### Códigos de bloque y tipo (pestaña Configuración)
 

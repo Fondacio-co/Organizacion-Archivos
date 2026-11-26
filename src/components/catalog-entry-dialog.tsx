@@ -115,7 +115,7 @@ export function CatalogEntryDialog({
                 id="cat-code"
                 value={code}
                 disabled={!!editing}
-                maxLength={3}
+                maxLength={4}
                 autoFocus={!editing}
                 placeholder={isBloque ? "EDU" : "INV"}
                 onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}

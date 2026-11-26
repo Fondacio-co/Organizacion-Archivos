@@ -7,7 +7,7 @@
 export type CatalogKind = "bloques" | "tipos"
 
 export interface CatalogEntry {
-  /** 3 letras mayúsculas: FOR, IAC… No se puede cambiar una vez creado */
+  /** De 2 a 4 letras mayúsculas: FOR, IAC, PE, EDUC… No se puede cambiar una vez creado */
   code: string
   /** Nombre o descripción: "Formación", "Informes de actividades" */
   label: string
@@ -75,7 +75,8 @@ export const DEFAULT_CATALOG: Catalog = {
   ],
 }
 
-const CODE_FORMAT = /^[A-Z]{3}$/
+/** Abreviaturas de 2 a 4 letras */
+const CODE_FORMAT = /^[A-Z]{2,4}$/
 const COLOR_FORMAT = /^#[0-9A-Fa-f]{6}$/
 /** Palabras que ya significan otra cosa en los nombres */
 const RESERVED = new Set(["ADC", "IMG", "VID", "PXL", "DSC"])
@@ -145,7 +146,7 @@ export function entryError(
   editing?: string
 ): string | null {
   if (!editing) {
-    if (!CODE_FORMAT.test(entry.code)) return "El código debe tener exactamente 3 letras (A-Z), sin tildes ni números."
+    if (!CODE_FORMAT.test(entry.code)) return "El código debe tener entre 2 y 4 letras (A-Z), sin tildes ni números."
     if (RESERVED.has(entry.code)) return `"${entry.code}" no se puede usar: ya significa otra cosa en los nombres.`
     const all = [...catalog.bloques, ...catalog.tipos]
     const clash = all.find((e) => e.code === entry.code)

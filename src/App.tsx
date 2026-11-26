@@ -32,6 +32,7 @@ import {
   type CatalogEntry,
   type CatalogKind,
 } from "@/lib/catalog"
+import { findDuplicates } from "@/lib/duplicates"
 import { complianceIssue, setCatalog } from "@/lib/nomenclature"
 import { buildPreview, defaultRule, normalize, splitName, type RenameRule } from "@/lib/rename"
 import {
@@ -108,6 +109,8 @@ export default function App() {
   const [kind, setKind] = useState<KindFilter>("all")
   const [includeSubfolders, setIncludeSubfolders] = useState(true)
   const [onlyNonCompliant, setOnlyNonCompliant] = useState(false)
+  const [onlyDuplicates, setOnlyDuplicates] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const [rule, setRule] = useState<RenameRule>(defaultRule)
@@ -116,7 +119,7 @@ export default function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
 
   useEffect(() => {
-    if (user) localStorage.setItem(historyKey(user.email), JSON.stringify(history.slice(0, 50)))
+    if (user) localStorage.setItem(historyKey(user.email), JSON.stringify(history.slice(0, 200)))
   }, [history, user])
 
   /** Muestra un error; si la sesión se venció, ofrece volver a entrar con un clic */
@@ -358,7 +361,10 @@ export default function App() {
     return m
   }, [files, catalog]) // catalog: al crear o borrar un código cambia qué cumple
 
-  const { visible, nonCompliantCount } = useMemo(() => {
+  /** Copias idénticas y archivos con el mismo nombre */
+  const dupInfo = useMemo(() => findDuplicates(files), [files])
+
+  const { visible, nonCompliantCount, duplicateCount } = useMemo(() => {
     const q = normalize(query.trim())
     const base = files.filter(
       (f) =>
@@ -367,8 +373,16 @@ export default function App() {
         (!q || normalize(f.name).includes(q))
     )
     const pending = base.filter((f) => issues.has(f.id))
-    return { visible: onlyNonCompliant ? pending : base, nonCompliantCount: pending.length }
-  }, [files, query, kind, includeSubfolders, onlyNonCompliant, issues])
+    const dups = base.filter((f) => dupInfo.has(f.id))
+    let shown = onlyNonCompliant ? pending : base
+    if (onlyDuplicates) {
+      // los duplicados se muestran juntos, grupo por grupo
+      shown = shown
+        .filter((f) => dupInfo.has(f.id))
+        .sort((a, b) => collator.compare(dupInfo.get(a.id)!.group, dupInfo.get(b.id)!.group))
+    }
+    return { visible: shown, nonCompliantCount: pending.length, duplicateCount: dups.length }
+  }, [files, query, kind, includeSubfolders, onlyNonCompliant, onlyDuplicates, issues, dupInfo])
 
   const toggle = (id: string) =>
     setSelected((prev) => {
@@ -445,7 +459,66 @@ export default function App() {
     }
   }
 
+  /* ---------- Eliminar (papelera de Drive) ---------- */
+
+  async function runTrash(list: DriveFile[], trashed: boolean): Promise<RenameResult[]> {
+    const results: RenameResult[] = []
+    setApplying({ done: 0, total: list.length })
+    const queue = [...list]
+    const worker = async () => {
+      for (let f = queue.shift(); f; f = queue.shift()) {
+        const r = { id: f.id, oldName: f.name, newName: f.name }
+        try {
+          await backend.setTrashed(f.id, trashed)
+          results.push({ ...r, ok: true })
+        } catch (e) {
+          results.push({ ...r, ok: false, error: message(e) })
+        }
+        setApplying({ done: results.length, total: list.length })
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker()])
+    setApplying(null)
+    return results
+  }
+
+  const toDelete = files.filter((f) => selected.has(f.id))
+  const deletable = toDelete.filter((f) => f.canTrash)
+
+  const deleteSelected = async () => {
+    setDeleteOpen(false)
+    const folderName = folder?.name ?? ""
+    const results = await runTrash(deletable, true)
+    const gone = new Set(results.filter((r) => r.ok).map((r) => r.id))
+    setFiles((prev) => prev.filter((f) => !gone.has(f.id)))
+    setSelected((prev) => new Set([...prev].filter((id) => !gone.has(id))))
+    if (results.length)
+      setHistory((h) => [
+        { id: crypto.randomUUID(), at: new Date(), folderName, results, undone: false, action: "trash" },
+        ...h,
+      ])
+    const failed = results.length - gone.size
+    if (failed) toast.warning(`${gone.size} enviados a la papelera, ${failed} con error`, { description: results.find((r) => !r.ok)?.error })
+    else
+      toast.success(`${gone.size} ${gone.size === 1 ? "archivo enviado" : "archivos enviados"} a la papelera`, {
+        description: "Se recuperan desde la papelera de Drive o con Deshacer en el Historial.",
+      })
+  }
+
   const undo = async (entry: HistoryEntry) => {
+    if (entry.action === "trash") {
+      // Sacar de la papelera
+      const list = entry.results
+        .filter((r) => r.ok)
+        .map((r) => ({ id: r.id, name: r.oldName }) as DriveFile)
+      const results = await runTrash(list, false)
+      const failed = results.filter((r) => !r.ok).length
+      setHistory((h) => h.map((e) => (e.id === entry.id ? { ...e, undone: true } : e)))
+      if (folder) await scan(folder)
+      if (failed) toast.warning(`No se pudieron restaurar ${failed} archivos`)
+      else toast.success("Archivos restaurados desde la papelera")
+      return
+    }
     // Si alguien volvió a cambiar el nombre después, no se pisa ese cambio
     const current = new Map(files.map((f) => [f.id, f.name]))
     const ok = entry.results.filter((r) => r.ok)
@@ -581,6 +654,11 @@ export default function App() {
               nonCompliantCount={nonCompliantCount}
               onlyNonCompliant={onlyNonCompliant}
               onOnlyNonCompliant={setOnlyNonCompliant}
+              duplicates={dupInfo}
+              duplicateCount={duplicateCount}
+              onlyDuplicates={onlyDuplicates}
+              onOnlyDuplicates={setOnlyDuplicates}
+              onDeleteSelected={() => setDeleteOpen(true)}
               onQuery={setQuery}
               onKind={setKind}
               onIncludeSubfolders={setIncludeSubfolders}
@@ -602,6 +680,43 @@ export default function App() {
           </div>
         </main>
       )}
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              ¿Enviar {deletable.length} {deletable.length === 1 ? "archivo" : "archivos"} a la papelera?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Se mueven a la papelera de Google Drive (no se borran para siempre). Se pueden recuperar
+              desde la papelera de Drive durante 30 días o con Deshacer en el Historial.
+              <span className="mt-2 block max-h-28 overflow-y-auto font-mono text-xs text-foreground">
+                {deletable.slice(0, 8).map((f) => (
+                  <span key={f.id} className="block truncate">
+                    • {f.name}
+                  </span>
+                ))}
+                {deletable.length > 8 && <span className="block">… y {deletable.length - 8} más</span>}
+              </span>
+              {toDelete.length > deletable.length && (
+                <span className="mt-2 block text-warning">
+                  {toDelete.length - deletable.length} no se pueden eliminar: tu cuenta no tiene permiso.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!deletable.length}
+              onClick={deleteSelected}
+              className="bg-brand-magenta text-white hover:bg-brand-magenta/90"
+            >
+              Sí, enviar a la papelera
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>

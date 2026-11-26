@@ -18,12 +18,14 @@ const MIME: Record<string, string> = {
   gsheet: "application/vnd.google-apps.spreadsheet",
 }
 
-const SAMPLE: [path: string, name: string, type: string, locked?: boolean][] = [
+/** [carpeta, nombre, tipo, sin permiso, huella del contenido (para simular copias idénticas)] */
+const SAMPLE: [path: string, name: string, type: string, locked?: boolean, md5?: string][] = [
   ["", "GEN_MAN_GuiaOrganizacionNomenclatura_v01", "gdoc"],
   ["", "CAM_IAC_2026-05-30_JornadaSiembra_v01.pdf", "pdf"],
   ["", "GEN_IRE_2026-S1_Presentacion_Resultados_v01", "gdoc"],
   ["", "GEN_IRE_2024-2026_MejorasYObrasCasa_v01", "gdoc"],
-  ["", "Informe mensual enero 2025.pdf", "pdf"],
+  ["", "Informe mensual enero 2025.pdf", "pdf", false, "md5-enero"],
+  ["", "Copia de Informe mensual enero 2025.pdf", "pdf", false, "md5-enero"],
   ["", "informe mensual febrero 2025.pdf", "pdf"],
   ["", "Informe Mensual MARZO 2025 (1).pdf", "pdf"],
   ["", "Presentación resultados Q1 borrador.pptx", "pptx"],
@@ -34,7 +36,8 @@ const SAMPLE: [path: string, name: string, type: string, locked?: boolean][] = [
   ["Facturas", "Factura_003_borrador.xlsx", "xlsx"],
   ["Facturas", "factura 004 BORRADOR.xlsx", "xlsx"],
   ["Facturas", "Resumen facturación 2025", "gsheet"],
-  ["Fotos evento", "IMG_20250312_101522.jpg", "jpg"],
+  ["Fotos evento", "IMG_20250312_101522.jpg", "jpg", false, "md5-foto1"],
+  ["Fotos evento", "IMG_20250312_101522 (1).jpg", "jpg", false, "md5-foto1"],
   ["Fotos evento", "IMG_20250312_101548.jpg", "jpg"],
   ["Fotos evento", "IMG_20250312_102011.jpg", "jpg"],
   ["Fotos evento", "IMG_20250312_102230.jpg", "jpg"],
@@ -45,6 +48,7 @@ const SAMPLE: [path: string, name: string, type: string, locked?: boolean][] = [
   ["Contratos", "contrato_servicios_v2_final_FINAL.docx", "docx"],
   ["Contratos", "Anexo técnico contrato.docx", "docx"],
   ["Contratos / 2024", "Contrato 2024 escaneado.pdf", "pdf", true],
+  ["Contratos / 2024", "Anexo tecnico contrato.docx", "docx"],
   ["Logos", "logo-principal.png", "png"],
   ["Logos", "logo principal fondo blanco.png", "png"],
   ["Logos", "Logos todos los formatos.zip", "zip"],
@@ -72,7 +76,7 @@ const TOP: Record<string, FolderEntry[]> = {
 
 function buildFiles(): DriveFile[] {
   const base = Date.parse("2025-03-20T15:00:00Z")
-  return SAMPLE.map(([path, name, type, locked], i) => {
+  return SAMPLE.map(([path, name, type, locked, md5], i) => {
     const mimeType = MIME[type]
     return {
       id: `demo-${i}`,
@@ -85,12 +89,17 @@ function buildFiles(): DriveFile[] {
       modifiedTime: new Date(base - i * 1000 * 60 * 60 * 31).toISOString(),
       webViewLink: undefined,
       canRename: !locked,
+      canTrash: !locked,
+      // los archivos nativos de Google no tienen huella de contenido
+      md5: mimeType.startsWith("application/vnd.google-apps.") ? undefined : (md5 ?? `md5-${i}`),
     }
   })
 }
 
 export function createDemoBackend(): DriveBackend {
   const files = buildFiles()
+  /** Archivos enviados a la papelera en la demostración */
+  const trashedIds = new Set<string>()
   /** La demostración simula dos cuentas para probar "Cambiar de cuenta" */
   let account = 0
   let catalogFile: CatalogFile | null = {
@@ -139,7 +148,7 @@ export function createDemoBackend(): DriveBackend {
           .sort()
           .map((n) => ({ id: `s:${prefix ? `${prefix} / ` : ""}${n}`, name: n }))
         const here = files
-          .filter((f) => f.path === prefix)
+          .filter((f) => f.path === prefix && !trashedIds.has(f.id))
           .sort((a, b) => a.name.localeCompare(b.name, "es", { numeric: true }))
           .map((f) => ({ id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime }))
         return [...folders, ...here]
@@ -160,7 +169,10 @@ export function createDemoBackend(): DriveBackend {
     async scanFolder(id, onProgress) {
       const prefix = id.startsWith("s:") ? id.slice(2) : null
       const inside = files.filter(
-        (f) => prefix !== null && (!prefix || f.path === prefix || f.path.startsWith(prefix + " / "))
+        (f) =>
+          !trashedIds.has(f.id) &&
+          prefix !== null &&
+          (!prefix || f.path === prefix || f.path.startsWith(prefix + " / "))
       )
       for (let i = 1; i <= 4; i++) {
         await wait(110)
@@ -181,6 +193,15 @@ export function createDemoBackend(): DriveBackend {
 
     // Catálogo en memoria: la primera cuenta es administradora y la segunda no,
     // para poder probar los dos casos con "Cambiar de cuenta"
+    async setTrashed(id, trashed) {
+      await wait(150 + Math.random() * 150)
+      const f = files.find((x) => x.id === id)
+      if (!f) throw new Error("No se encontró o esta cuenta no tiene acceso.")
+      if (!f.canTrash) throw new Error("Esta cuenta no tiene permiso para eliminar ese archivo.")
+      if (trashed) trashedIds.add(id)
+      else trashedIds.delete(id)
+    },
+
     async loadCatalog() {
       await wait(200)
       if (!catalogFile) return null

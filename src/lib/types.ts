@@ -25,6 +25,12 @@ export interface DriveFile {
   modifiedTime: string
   webViewLink?: string
   canRename: boolean
+  /** true = la cuenta puede mandarlo a la papelera */
+  canTrash: boolean
+  /** Huella del contenido (Drive no la da para Documentos/Hojas de Google) */
+  md5?: string
+  /** Tamaño en bytes (no aplica a archivos nativos de Google) */
+  size?: number
 }
 
 export interface FolderInfo {
@@ -122,6 +128,8 @@ export interface DriveBackend {
     onProgress?: (p: ScanProgress) => void
   ): Promise<ScanResult>
   rename(id: string, newName: string): Promise<void>
+  /** Manda el archivo a la papelera de Drive (true) o lo restaura (false) */
+  setTrashed(id: string, trashed: boolean): Promise<void>
   /** Busca el .json del catálogo (null si todavía no existe) */
   loadCatalog(): Promise<CatalogFile | null>
   /** Crea el .json y lo comparte en solo lectura con el dominio de la cuenta */

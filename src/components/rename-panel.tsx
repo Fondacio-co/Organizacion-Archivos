@@ -424,7 +424,7 @@ export function RenamePanel({
             <div className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 font-medium">
                 <Loader2Icon className="size-4 animate-spin text-primary" />
-                Renombrando…
+                Aplicando cambios…
               </span>
               <span className="text-muted-foreground tabular-nums">
                 {applying.done} / {applying.total}

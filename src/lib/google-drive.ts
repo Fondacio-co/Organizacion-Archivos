@@ -313,7 +313,7 @@ export function createGoogleBackend(clientId: string): DriveBackend {
             includeItemsFromAllDrives: "true",
             pageSize: "1000",
             fields:
-              "nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,capabilities/canRename)",
+              "nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,md5Checksum,size,capabilities(canRename,canTrash))",
           })
           if (pageToken) params.set("pageToken", pageToken)
           const page = await api<{
@@ -324,7 +324,9 @@ export function createGoogleBackend(clientId: string): DriveBackend {
               mimeType: string
               modifiedTime: string
               webViewLink?: string
-              capabilities?: { canRename?: boolean }
+              md5Checksum?: string
+              size?: string
+              capabilities?: { canRename?: boolean; canTrash?: boolean }
             }[]
           }>(`/files?${params}`)
           for (const f of page.files) {
@@ -347,6 +349,9 @@ export function createGoogleBackend(clientId: string): DriveBackend {
               modifiedTime: f.modifiedTime,
               webViewLink: f.webViewLink,
               canRename: f.capabilities?.canRename ?? true,
+              canTrash: f.capabilities?.canTrash ?? false,
+              md5: f.md5Checksum,
+              size: f.size ? Number(f.size) : undefined,
             })
           }
           pageToken = page.nextPageToken
@@ -367,6 +372,13 @@ export function createGoogleBackend(clientId: string): DriveBackend {
       await api(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,name`, {
         method: "PATCH",
         body: JSON.stringify({ name: newName }),
+      })
+    },
+
+    async setTrashed(id, trashed) {
+      await api(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id,trashed`, {
+        method: "PATCH",
+        body: JSON.stringify({ trashed }),
       })
     },
 

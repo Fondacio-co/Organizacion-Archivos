@@ -24,7 +24,8 @@ function rebuild() {
   VALID_RE = new RegExp(
     `^(${bloques})_(${tipos})_` +
       `(?<date>\\d{4}(-(0[1-9]|1[0-2])(-(0[1-9]|[12]\\d|3[01]))?|-S[12]|-\\d{4})?_)?` +
-      `[A-Z0-9][A-Za-z0-9]*_(v\\d{2}|FINAL)$`
+      // la versión es opcional
+      `[A-Z0-9][A-Za-z0-9]*(_(v\\d{2}|FINAL))?$`
   )
 }
 rebuild()
@@ -51,8 +52,16 @@ export const isSinFecha = (code: string) => !!tipoInfo(code)?.sinFecha
 /** "auto" = respeta la fecha que ya trae el nombre (con su precisión) */
 export type DatePrecision = "auto" | "day" | "month" | "year" | "none"
 
-export const VERSIONS = ["keep", "v01", "v02", "v03", "v04", "v05", "FINAL"] as const
-export type VersionChoice = (typeof VERSIONS)[number]
+/** "keep" = la que ya tiene (o ninguna), "none" = quitarla, v01…v20, FINAL */
+export const VERSIONS: string[] = [
+  "keep",
+  "none",
+  ...Array.from({ length: 20 }, (_, i) => `v${String(i + 1).padStart(2, "0")}`),
+  "FINAL",
+]
+export type VersionChoice = string
+/** Versión bien escrita: v01…v99 o FINAL */
+export const VERSION_FORMAT = /^(v\d{2}|FINAL)$/
 
 /** Lo que el usuario corrige a mano para un archivo concreto en la vista previa */
 export interface NomenOverride {
@@ -185,9 +194,12 @@ export function complianceIssue(base: string): string | null {
   if (!isBloque(p[0]))
     return `Falta el bloque al inicio (${catalog.bloques.map((b) => b.code).join(", ")})`
   if (!p[1] || !isTipo(p[1])) return "Falta el tipo después del bloque (ACT, IAC, MAN…)"
+  // la versión es opcional: si está, va al final como v01…v99 o FINAL
   const last = p[p.length - 1]
-  if (!/^(v\d{2}|FINAL)$/.test(last)) return "Falta la versión al final (v01, v02… o FINAL)"
-  const middle = p.slice(2, -1)
+  const hasVersion = p.length > 3 && VERSION_FORMAT.test(last)
+  if (!hasVersion && p.length > 3 && /^(v\d|v\d{3,}|V\d+|final|Final)$/.test(last))
+    return "La versión va como v01, v02… o FINAL"
+  const middle = p.slice(2, hasVersion ? -1 : undefined)
   if (middle.length === 0 || (middle.length === 1 && DATE_ONLY_RE.test(middle[0])))
     return "Falta la descripción"
   if (middle.length > 2) return "La descripción va junta, sin guiones bajos"
@@ -278,7 +290,8 @@ export function nomenParts(
       ? toDescription(override.description)
       : toDescription(rule.description) || parsed.description
 
-  const version = rule.version === "keep" ? (parsed.version ?? "v01") : rule.version
+  const version =
+    rule.version === "keep" ? (parsed.version ?? "") : rule.version === "none" ? "" : rule.version
 
   const missing = !bloque
     ? "Elige el bloque"

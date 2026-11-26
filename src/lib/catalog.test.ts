@@ -22,13 +22,15 @@ const entry = (patch: Partial<CatalogEntry> = {}): CatalogEntry => ({
 afterEach(() => setCatalog(DEFAULT_CATALOG))
 
 describe("validaciones al crear o editar", () => {
-  it("acepta un código nuevo bien escrito", () => {
+  it("acepta un código nuevo bien escrito, de 2 a 4 letras", () => {
     expect(entryError(entry(), DEFAULT_CATALOG, "bloques")).toBeNull()
+    expect(entryError(entry({ code: "PE" }), DEFAULT_CATALOG, "bloques")).toBeNull()
+    expect(entryError(entry({ code: "EDUC" }), DEFAULT_CATALOG, "bloques")).toBeNull()
   })
   it.each([
-    ["ED", "3 letras"],
-    ["EDUC", "3 letras"],
-    ["ED1", "3 letras"],
+    ["E", "entre 2 y 4"],
+    ["EDUCA", "entre 2 y 4"],
+    ["ED1", "entre 2 y 4"],
     ["FOR", "Ya existe un bloque"],
     ["IAC", "Ya existe un tipo"],
     ["ADC", "no se puede usar"],
@@ -108,6 +110,13 @@ describe("las reglas de nombres usan el catálogo vigente", () => {
     setCatalog(upsertEntry(DEFAULT_CATALOG, "bloques", entry()))
     expect(isCompliant("EDU_IAC_2026-05_JornadaSiembra_v01")).toBe(true)
     expect(nomenParts("edu_iac_jornada siembra", "2026-05-02T12:00:00Z", defaultNomen).bloque).toBe("EDU")
+  })
+  it("códigos de 2 y 4 letras funcionan en los nombres", () => {
+    let c = upsertEntry(DEFAULT_CATALOG, "bloques", entry({ code: "PE", label: "Pedagogía" }))
+    c = upsertEntry(c, "tipos", entry({ code: "INFO", label: "Infografías" }))
+    setCatalog(c)
+    expect(isCompliant("PE_INFO_2026_CicloAgua_v01")).toBe(true)
+    expect(nomenParts("pe_info_ciclo del agua", "2026-05-02T12:00:00Z", defaultNomen)).toMatchObject({ bloque: "PE", tipo: "INFO" })
   })
   it("un tipo nuevo 'sin fecha' no recibe fecha automática", () => {
     setCatalog(upsertEntry(DEFAULT_CATALOG, "tipos", entry({ code: "INV", label: "Inventarios", sinFecha: true })))
