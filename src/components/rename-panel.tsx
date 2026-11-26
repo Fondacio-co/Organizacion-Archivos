@@ -549,7 +549,7 @@ function NomenPreviewRow({
   const badge = STATUS[status]
   const hint = DATE_SOURCE_HINT[parts.dateSource]
   const dateValue = override.date ?? parts.date
-  // En "Como está", el campo se adapta a la fecha que trae el archivo (año, mes o día)
+  // En "Actual", el campo se adapta a la fecha que trae el archivo (año, mes o día)
   const inputKind: "day" | "month" | "year" | "period" =
     nomen.precision === "auto"
       ? isPeriod(parts.date) || /^\d{4}-(S|\d{3})/i.test(override.date ?? "")

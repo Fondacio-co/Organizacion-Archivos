@@ -17,7 +17,7 @@ import {
 import { splitName, type PreviewItem } from "@/lib/rename"
 
 const PRECISIONS: [DatePrecision, string][] = [
-  ["auto", "Como está"],
+  ["auto", "Actual"],
   ["day", "Día"],
   ["month", "Mes"],
   ["year", "Año"],
@@ -25,7 +25,7 @@ const PRECISIONS: [DatePrecision, string][] = [
 ]
 
 const VERSION_LABELS: Record<VersionChoice, string> = {
-  keep: "Dejar como está (v01 si no tiene)",
+  keep: "Actual (v01 si no tiene)",
   v01: "v01",
   v02: "v02",
   v03: "v03",
@@ -37,11 +37,11 @@ const VERSION_LABELS: Record<VersionChoice, string> = {
 /** "keep" = mantener el bloque/tipo que ya trae cada archivo */
 const KEEP = "keep"
 const bloqueItems = {
-  [KEEP]: "El que ya tiene",
+  [KEEP]: "Actual",
   ...Object.fromEntries(Object.entries(BLOQUES).map(([k, v]) => [k, `${k} · ${v.label}`])),
 }
 const tipoItems = {
-  [KEEP]: "El que ya tiene",
+  [KEEP]: "Actual",
   ...Object.fromEntries(Object.entries(TIPOS).map(([k, v]) => [k, `${k} · ${v}`])),
 }
 
@@ -135,7 +135,7 @@ export function NomenTab({
             </SelectTrigger>
             <SelectContent className="min-w-60">
               <SelectItem value={KEEP}>
-                <span className="text-muted-foreground">El que ya tiene cada archivo</span>
+                <span className="text-muted-foreground">Actual</span>
               </SelectItem>
               {Object.entries(BLOQUES).map(([code, b]) => (
                 <SelectItem key={code} value={code}>
@@ -173,7 +173,7 @@ export function NomenTab({
             </SelectTrigger>
             <SelectContent className="max-h-80 min-w-80">
               <SelectItem value={KEEP}>
-                <span className="text-muted-foreground">El que ya tiene cada archivo</span>
+                <span className="text-muted-foreground">Actual</span>
               </SelectItem>
               {Object.entries(TIPOS).map(([code, label]) => (
                 <SelectItem key={code} value={code}>
